@@ -127,6 +127,9 @@ updateSpellBarSelection();
 
 // --- Image de tuile ---
 const tileImage = new Image();
+tileImage.src = 'sol.png';
+let tileImageLoaded = false;
+tileImage.onload = () => { tileImageLoaded = true; };
 let damageAnimations = [];
 
 // --- UI State for Hover ---
@@ -373,6 +376,11 @@ function drawTile(gridX, gridY, type, highlightColor = null) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#434c55';
         ctx.stroke();
+    } else if (tileImageLoaded) {
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(tileImage, -TILE_W / 2, -TILE_H / 2, TILE_W, TILE_H);
+        ctx.restore();
     } else {
         ctx.fillStyle = (gridX + gridY) % 2 === 0 ? '#b2f7ef' : '#f7d6e0';
         ctx.shadowColor = '#222';
@@ -395,18 +403,18 @@ function drawGrid() {
             let highlight = null;
             // Highlight portée déplacement
             if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
-                highlight = 'rgba(46,204,113,0.18)';
+                highlight = 'rgba(46,204,113,0.22)'; // vert léger
             } else if (playerState === 'aiming' && attackableTiles.some(t => t.x === x && t.y === y)) {
-                highlight = 'rgba(52,152,219,0.18)';
+                highlight = 'rgba(52,152,219,0.22)'; // bleu léger
             }
             // Effet hover déplacement
             if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
                 if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
-                    highlight = 'rgba(46,204,113,0.45)';
+                    highlight = 'rgba(39, 174, 96, 0.75)'; // vert foncé, très visible
                 } else if (playerState === 'aiming' && attackableTiles.some(t => t.x === x && t.y === y)) {
-                    highlight = 'rgba(52,152,219,0.45)';
+                    highlight = 'rgba(41, 128, 185, 0.75)'; // bleu foncé, très visible
                 } else {
-                    highlight = 'rgba(255,255,255,0.25)';
+                    highlight = 'rgba(255,255,255,0.55)'; // blanc plus visible
                 }
             }
             // Effet zone d'effet du sort si hover en mode visée
@@ -422,7 +430,7 @@ function drawGrid() {
                     ];
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
-                            drawTile(tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.35)');
+                            drawTile(tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.45)'); // orange plus visible
                         }
                     }
                 } else if (spell.push) {
@@ -443,7 +451,7 @@ function drawGrid() {
                             nextPushY < 0 || nextPushY >= GRID_ROWS ||
                             mapGrid[nextPushY]?.[nextPushX] === 1
                         ) break;
-                        drawTile(nextPushX, nextPushY, mapGrid[nextPushY][nextPushX], 'rgba(0,184,148,0.35)');
+                        drawTile(nextPushX, nextPushY, mapGrid[nextPushY][nextPushX], 'rgba(0,184,148,0.55)'); // turquoise plus visible
                         pushX = nextPushX; pushY = nextPushY;
                     }
                 }
@@ -700,7 +708,7 @@ function animateEntityMove(entity, targetGridX, targetGridY, cost, onComplete) {
     isMoving = true;
     const start = isoToScreen(entity.gridX, entity.gridY);
     const end = isoToScreen(targetGridX, targetGridY);
-    const duration = 250 + 100 * cost; // durée en ms selon la distance
+    const duration = 80 + 40 * cost; // durée en ms selon la distance (plus rapide)
     const startTime = performance.now();
     function step(now) {
         const t = Math.min(1, (now - startTime) / duration);
