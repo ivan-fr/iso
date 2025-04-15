@@ -413,13 +413,12 @@ function drawGrid() {
             if (playerState === 'aiming' && hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
                 const spell = SPELLS[selectedSpell];
                 if (spell.aoe) {
-                    // Zone croix
                     const aoeTiles = [
-                        {x: x, y: y},
-                        {x: x+1, y: y},
-                        {x: x-1, y: y},
-                        {x: x, y: y+1},
-                        {x: x, y: y-1}
+                        {x: x, y: y},           // Centre
+                        {x: x + 1, y: y},      // Droite
+                        {x: x - 1, y: y},      // Gauche
+                        {x: x, y: y + 1},      // Bas
+                        {x: x, y: y - 1}       // Haut
                     ];
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
@@ -622,7 +621,7 @@ function startPlayerTurn() { currentTurn = 'player'; playerState = 'idle'; playe
 async function startBossTurn() { currentTurn = 'boss'; playerState = 'idle'; boss.mp = MAX_MOVE_POINTS; boss.ap = MAX_ACTION_POINTS; reachableTiles = []; attackableTiles = []; isBossActing = true; updateUI(); showMessage("Tour du Boss", 1500); await executeBossAI(); if (!gameOver) { endTurn(); } else { updateUI(); } }
 
 async function executeBossAI() {
-    let attackedThisTurn = false;
+    let usedActionPoints = 0;
 
     async function tryAttack() {
         if (boss.ap <= 0) return false;
@@ -633,31 +632,33 @@ async function executeBossAI() {
             bossAttackPlayer();
             updateUI();
             await delay(800);
+            usedActionPoints++;
             return true;
         }
         return false;
     }
 
-    // Premier essai d'attaque
-    attackedThisTurn = await tryAttack();
+    // Essayer d'attaquer autant de fois que possible
+    while (usedActionPoints < MAX_ACTION_POINTS) {
+        const attacked = await tryAttack();
+        if (!attacked) break; // Sort de la boucle si on ne peut pas attaquer
+    }
 
-    // Déplacement si nécessaire
-    if (boss.mp > 0) {
+    // Si on n'a pas utilisé tous les points d'action, on se déplace et on réessaie
+    if (usedActionPoints < MAX_ACTION_POINTS && boss.mp > 0) {
         const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss);
         let bestTile = null;
         let bestScore = -Infinity;
 
         for (const tile of bossReachable) {
-            // Calcul du score pour cette tile
             const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
             const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
             const hasLoS = hasLineOfSight(tile.x, tile.y, player.gridX, player.gridY);
             
-            let score = -distToPlayer * 10; // Base score on distance
-            if (inAttackRange && hasLoS) score += 1000; // Bonus important si on peut attaquer depuis cette position
-            score -= tile.cost * 5; // Pénalité pour les mouvements longs
+            let score = -distToPlayer * 10;
+            if (inAttackRange && hasLoS) score += 1000;
+            score -= tile.cost * 5;
             
-            // Si cette tile donne un meilleur score
             if (score > bestScore) {
                 bestScore = score;
                 bestTile = tile;
@@ -674,12 +675,12 @@ async function executeBossAI() {
                 waitMove();
             });
             
-            // Attendre un peu après le mouvement
             await delay(500);
             
-            // Réessayer d'attaquer après le déplacement si on n'a pas encore attaqué
-            if (!attackedThisTurn && boss.ap > 0) {
-                await tryAttack();
+            // Réessayer d'attaquer avec les points d'action restants
+            while (usedActionPoints < MAX_ACTION_POINTS) {
+                const attacked = await tryAttack();
+                if (!attacked) break;
             }
         }
     }
@@ -827,21 +828,29 @@ function updateProjectiles() {
                 // --- Sort zone croix ---
                 else if (p.spellIndex === 1) {
                     const affected = [
-                        {x: p.targetGridX, y: p.targetGridY},
-                        {x: p.targetGridX+1, y: p.targetGridX},
-                        {x: p.targetGridX-1, y: p.targetGridX},
-                        {x: p.targetGridX, y: p.targetGridY+1},
-                        {x: p.targetGridX, y: p.targetGridY-1}
+                        {x: p.targetGridX, y: p.targetGridY},      // Centre
+                        {x: p.targetGridX + 1, y: p.targetGridY},  // Droite
+                        {x: p.targetGridX - 1, y: p.targetGridY},  // Gauche
+                        {x: p.targetGridX, y: p.targetGridY + 1},  // Bas
+                        {x: p.targetGridX, y: p.targetGridY - 1}   // Haut
                     ];
+                    let hitCount = 0;
                     for (const tile of affected) {
                         if (boss.gridX === tile.x && boss.gridY === tile.y) {
                             const dmg = spell.damage();
                             boss.hp -= dmg;
                             showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, dmg, spell.color);
-                            showMessage(`Boss touché (zone) ! (-${dmg} HP)`, 1000);
-                            if (boss.hp <= 0) { boss.hp = 0; showMessage("Boss Vaincu ! VICTOIRE !", 5000); gameOver = true; }
-                            updateUI();
+                            hitCount++;
                         }
+                    }
+                    if (hitCount > 0) {
+                        showMessage(`Boss touché ${hitCount} fois ! (-${hitCount * spell.damage()} HP total)`, 1000);
+                        if (boss.hp <= 0) {
+                            boss.hp = 0;
+                            showMessage("Boss Vaincu ! VICTOIRE !", 5000);
+                            gameOver = true;
+                        }
+                        updateUI();
                     }
                 }
                 // --- Sort poussée (pousse de 2 cases) ---
