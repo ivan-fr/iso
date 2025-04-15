@@ -525,7 +525,81 @@ function drawEntity(entity, color) {
         ctx.restore();
     }
 }
-function drawProjectiles() { projectiles.forEach(p => { ctx.fillStyle = p.owner === 'player' ? '#f1c40f' : '#e74c3c'; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill(); }); }
+
+function drawProjectiles() {
+    projectiles.forEach(p => {
+        ctx.save();
+        if (p.owner === 'player') {
+            const spell = SPELLS[p.spellIndex];
+            
+            // Effet de particules commun
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = spell.color;
+            ctx.fill();
+            
+            // Effets spécifiques selon le sort
+            if (p.spellIndex === 0) { // Mono-cible
+                // Étoile brillante qui tourne
+                ctx.globalAlpha = 1;
+                const angle = Date.now() / 200;
+                for (let i = 0; i < 4; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(
+                        p.x + Math.cos(angle + i * Math.PI / 2) * 12,
+                        p.y + Math.sin(angle + i * Math.PI / 2) * 12
+                    );
+                    ctx.strokeStyle = spell.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            } 
+            else if (p.spellIndex === 1) { // Zone croix
+                // Cercles concentriques qui pulsent
+                const pulse = (Math.sin(Date.now() / 150) + 1) * 0.5;
+                ctx.globalAlpha = 0.5 - pulse * 0.3;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 10 + pulse * 5, 0, Math.PI * 2);
+                ctx.strokeStyle = spell.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            else if (p.spellIndex === 2) { // Poussée
+                // Traînée de particules coniques
+                ctx.globalAlpha = 0.6;
+                const angle = Math.atan2(p.dy, p.dx);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(
+                    p.x - Math.cos(angle) * 15 + Math.cos(angle + Math.PI/2) * 8,
+                    p.y - Math.sin(angle) * 15 + Math.sin(angle + Math.PI/2) * 8
+                );
+                ctx.lineTo(
+                    p.x - Math.cos(angle) * 15 + Math.cos(angle - Math.PI/2) * 8,
+                    p.y - Math.sin(angle) * 15 + Math.sin(angle - Math.PI/2) * 8
+                );
+                ctx.closePath();
+                ctx.fillStyle = spell.color;
+                ctx.fill();
+            }
+        } else {
+            // Projectile du boss
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Effet de trainée pour le boss
+            ctx.globalAlpha = 0.3;
+            ctx.beginPath();
+            ctx.arc(p.x - p.dx * 2, p.y - p.dy * 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+}
 
 // --- UI Sorts ---
 function drawSpellUI() {
@@ -546,60 +620,70 @@ function drawSpellUI() {
 // --- Game Logic ---
 function startPlayerTurn() { currentTurn = 'player'; playerState = 'idle'; player.mp = MAX_MOVE_POINTS; player.ap = MAX_ACTION_POINTS; reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player); attackableTiles = []; isBossActing = false; updateUI(); showMessage("Tour du Joueur", 1500); }
 async function startBossTurn() { currentTurn = 'boss'; playerState = 'idle'; boss.mp = MAX_MOVE_POINTS; boss.ap = MAX_ACTION_POINTS; reachableTiles = []; attackableTiles = []; isBossActing = true; updateUI(); showMessage("Tour du Boss", 1500); await executeBossAI(); if (!gameOver) { endTurn(); } else { updateUI(); } }
+
 async function executeBossAI() {
-    // Attaque (si possible)
-    for (let i = 0; i < MAX_ACTION_POINTS; i++) {
-        if (gameOver || boss.ap <= 0) break;
+    let attackedThisTurn = false;
+
+    async function tryAttack() {
+        if (boss.ap <= 0) return false;
         const dx = boss.gridX - player.gridX;
         const dy = boss.gridY - player.gridY;
         const distToPlayerSq = dx * dx + dy * dy;
-        if (distToPlayerSq <= BOSS_ATTACK_RANGE_SQ) {
-            if (hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY)) {
-                bossAttackPlayer();
-                updateUI();
-                await delay(800);
-            } else {
-                showMessage("Le boss ne vous voit pas !", 1500);
-                break;
-            }
-        } else {
-            break;
+        if (distToPlayerSq <= BOSS_ATTACK_RANGE_SQ && hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY)) {
+            bossAttackPlayer();
+            updateUI();
+            await delay(800);
+            return true;
         }
+        return false;
     }
-    // Déplacement (si possible)
-    const currentDistToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-    if (!gameOver && boss.mp > 0 && currentDistToPlayer > 1) {
+
+    // Premier essai d'attaque
+    attackedThisTurn = await tryAttack();
+
+    // Déplacement si nécessaire
+    if (boss.mp > 0) {
         const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss);
         let bestTile = null;
-        let minCost = Infinity;
-        let minDistToPlayerHeuristic = Infinity;
+        let bestScore = -Infinity;
+
         for (const tile of bossReachable) {
-            const dHeuristic = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
-            if (dHeuristic < minDistToPlayerHeuristic) {
-                minDistToPlayerHeuristic = dHeuristic;
+            // Calcul du score pour cette tile
+            const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
+            const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
+            const hasLoS = hasLineOfSight(tile.x, tile.y, player.gridX, player.gridY);
+            
+            let score = -distToPlayer * 10; // Base score on distance
+            if (inAttackRange && hasLoS) score += 1000; // Bonus important si on peut attaquer depuis cette position
+            score -= tile.cost * 5; // Pénalité pour les mouvements longs
+            
+            // Si cette tile donne un meilleur score
+            if (score > bestScore) {
+                bestScore = score;
                 bestTile = tile;
-                minCost = tile.cost;
-            } else if (dHeuristic === minDistToPlayerHeuristic && tile.cost < minCost) {
-                bestTile = tile;
-                minCost = tile.cost;
             }
         }
-        if (bestTile) {
-            // Attendre la fin de l'animation de déplacement
+
+        if (bestTile && (bestScore > -Infinity)) {
             await new Promise(resolve => {
-                moveEntityTo(boss, bestTile.x, bestTile.y, minCost);
-                // Vérifier périodiquement si l'animation est terminée
+                moveEntityTo(boss, bestTile.x, bestTile.y, bestTile.cost);
                 function waitMove() {
                     if (!isMoving) resolve();
                     else setTimeout(waitMove, 10);
                 }
                 waitMove();
             });
-            showMessage(`Boss se déplace vers (${bestTile.x}, ${bestTile.y})`, 1500);
-            updateUI();
-            await delay(800);
+            
+            // Attendre un peu après le mouvement
+            await delay(500);
+            
+            // Réessayer d'attaquer après le déplacement si on n'a pas encore attaqué
+            if (!attackedThisTurn && boss.ap > 0) {
+                await tryAttack();
+            }
         }
     }
+
     isBossActing = false;
 }
 
@@ -677,14 +761,27 @@ function playerAttack(targetGridX, targetGridY) {
     const dy = targetY - startY;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist === 0) return;
+
+    // Ajout d'un effet de préparation du sort
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(startX, startY, 20, 0, Math.PI * 2);
+    ctx.fillStyle = spell.color;
+    ctx.fill();
+    ctx.restore();
+
     const projectileDx = (dx / dist) * PROJECTILE_SPEED;
     const projectileDy = (dy / dist) * PROJECTILE_SPEED;
-    // Ajoute le type de sort et ses infos au projectile
+    
+    // Vitesse adaptée selon le type de sort
+    const speed = spell.push ? PROJECTILE_SPEED * 1.5 : PROJECTILE_SPEED;
+    
     projectiles.push({
         x: startX,
         y: startY,
-        dx: projectileDx,
-        dy: projectileDy,
+        dx: (dx / dist) * speed,
+        dy: (dy / dist) * speed,
         owner: 'player',
         targetScreenX: targetX,
         targetScreenY: targetY,
@@ -693,6 +790,7 @@ function playerAttack(targetGridX, targetGridY) {
         spellIndex: selectedSpell,
         spellData: spell
     });
+    
     showMessage(`Sort lancé : ${spell.name}`, 1000);
 }
 
