@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu Isométrique Tour par Tour v5.2 (LoS Fix)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a252f; /* Slightly darker background */
+            color: #ecf0f1; /* Light text color */
+            overflow: hidden; /* Prevent scrolling */
+        }
+        .game-container {
+            border: 4px solid #ecf0f1;
+            border-radius: 15px;
+            padding: 15px;
+            background-color: #2c3e50; /* Adjusted container background */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4); /* Slightly stronger shadow */
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 90%;
+            max-width: 750px; /* Slightly wider */
+        }
+        canvas {
+            display: block;
+            margin: 10px auto;
+            /* background-color: #87CEEB; Removed, grid draws background */
+            border: 2px solid #ecf0f1;
+            border-radius: 10px;
+            cursor: default;
+            max-width: 100%;
+            height: auto;
+            background: linear-gradient(to bottom, #6dd5ed, #2193b0); /* Gradient background */
+        }
+        .info-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 0.7em;
+        }
+        .info-group {
+            background-color: rgba(0,0,0,0.2);
+            padding: 5px 8px;
+            border-radius: 5px;
+            margin: 3px;
+            min-width: 120px;
+            text-align: center;
+        }
+        .controls {
+             margin-top: 10px;
+        }
+        .info {
+            margin-top: 5px;
+            font-size: 0.75em;
+            color: #bdc3c7;
+        }
+        button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #e74c3c; /* Red */
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease, opacity 0.3s ease;
+            margin: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            font-size: 0.75em;
+        }
+        button:hover:not(:disabled) {
+            background-color: #c0392b; /* Darker red */
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.95); /* Push effect */
+        }
+        button:disabled {
+            background-color: #95a5a6; /* Gray when disabled */
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .health-bar-container {
+            width: 90px;
+            height: 8px;
+            background-color: #555;
+            border: 1px solid #ecf0f1;
+            border-radius: 4px;
+            margin: 2px auto 0;
+            overflow: hidden;
+        }
+        .health-bar {
+            height: 100%;
+            background-color: #2ecc71; /* Green */
+            width: 100%;
+            transition: width 0.5s ease, background-color 0.5s ease;
+            border-radius: 3px 0 0 3px;
+        }
+        #player-health-bar {
+             background-color: #3498db; /* Blue for player health */
+        }
+        .message-box {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(44, 62, 80, 0.9);
+            color: #ecf0f1;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+            font-size: 0.8em;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-lg mb-2">Iso Turn Fight v5.2 (LoS Fix)</h1>
+
+        <div class="info-bar">
+            <div class="info-group">
+                Tour: <span id="turn-indicator">Joueur</span>
+            </div>
+             <div class="info-group">
+                Joueur HP:
+                 <div class="health-bar-container">
+                    <div id="player-health-bar" class="health-bar"></div>
+                </div>
+                <span id="player-ap">2</span> PA / <span id="player-mp">6</span> PM
+            </div>
+            <div class="info-group">
+                Boss HP:
+                <div class="health-bar-container">
+                    <div id="boss-health-bar" class="health-bar"></div>
+                </div>
+                 <span id="boss-ap">2</span> PA / <span id="boss-mp">6</span> PM
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="600" height="450"></canvas>
+
+        <!-- Barre de sélection de sorts SVG -->
+        <div id="spellBar" style="display:flex;justify-content:center;gap:18px;margin:10px 0;">
+            <button class="spell-btn" id="spell-btn-0" title="Mono-cible" style="background:none;border:none;outline:none;cursor:pointer;padding:0;">
+                <svg width="44" height="44" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r="16" fill="#f1c40f" stroke="#222" stroke-width="2"/>
+                    <circle cx="22" cy="22" r="7" fill="none" stroke="#222" stroke-width="3"/>
+                </svg>
+            </button>
+            <button class="spell-btn" id="spell-btn-1" title="Zone croix" style="background:none;border:none;outline:none;cursor:pointer;padding:0;">
+                <svg width="44" height="44" viewBox="0 0 44 44">
+                    <rect x="19" y="6" width="6" height="32" rx="3" fill="#e67e22" stroke="#222" stroke-width="2"/>
+                    <rect x="6" y="19" width="32" height="6" rx="3" fill="#e67e22" stroke="#222" stroke-width="2"/>
+                </svg>
+            </button>
+            <button class="spell-btn" id="spell-btn-2" title="Poussée" style="background:none;border:none;outline:none;cursor:pointer;padding:0;">
+                <svg width="44" height="44" viewBox="0 0 44 44">
+                    <rect x="18" y="12" width="8" height="20" rx="4" fill="#00b894" stroke="#222" stroke-width="2"/>
+                    <polygon points="22,6 32,18 12,18" fill="#00b894" stroke="#222" stroke-width="2"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="controls">
+            <button id="endTurnButton">Fin de Tour (F)</button>
+        </div>
+         <div class="info">
+            Tour Joueur: Cliquez case verte (bouger). Espace (viser), clic case bleue (tirer), Echap (annuler). Obstacles gris bloquent.
+        </div>
+    </div>
+    <div id="messageBox" class="message-box">Message</div>
+    <script src="game.js"></script>
+</body>
+</html>
