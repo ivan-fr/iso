@@ -21,12 +21,17 @@ const MAX_MOVE_POINTS = 6; const MAX_ACTION_POINTS = 2;
 const PLAYER_ATTACK_RANGE = 7; const BOSS_ATTACK_RANGE = 5;
 const BOSS_ATTACK_RANGE_SQ = BOSS_ATTACK_RANGE * BOSS_ATTACK_RANGE;
 
-// --- MapGrid par défaut (0 = sol, 1 = obstacle) ---
+// --- MapGrid amélioré : obstacles symétriques en forme de L inversés ---
 const mapGrid = Array.from({ length: GRID_ROWS }, (_, y) =>
-    Array.from({ length: GRID_COLS }, (_, x) =>
-        // Exemple : obstacles sur le bord et une croix centrale
-        (x === 0 || y === 0 || x === GRID_COLS - 1 || y === GRID_ROWS - 1 || (x === 7 && y > 2 && y < 11) || (y === 7 && x > 2 && x < 11)) ? 1 : 0
-    )
+    Array.from({ length: GRID_COLS }, (_, x) => {
+        // Position des obstacles en L inversés
+        const isTopLeftL = (x === 3 && y >= 3 && y <= 5) || (y === 3 && x >= 3 && x <= 5);
+        const isTopRightL = (x === GRID_COLS-4 && y >= 3 && y <= 5) || (y === 3 && x >= GRID_COLS-6 && x <= GRID_COLS-4);
+        const isBottomLeftL = (x === 3 && y >= GRID_ROWS-6 && y <= GRID_ROWS-4) || (y === GRID_ROWS-4 && x >= 3 && x <= 5);
+        const isBottomRightL = (x === GRID_COLS-4 && y >= GRID_ROWS-6 && y <= GRID_ROWS-4) || (y === GRID_ROWS-4 && x >= GRID_COLS-6 && x <= GRID_COLS-4);
+        
+        return isTopLeftL || isTopRightL || isBottomLeftL || isBottomRightL ? 1 : 0;
+    })
 );
 
 // --- Entités principales ---
