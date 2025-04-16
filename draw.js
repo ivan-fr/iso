@@ -9,77 +9,99 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
     };
     ctx.save();
     ctx.translate(Math.round(pos.x), Math.round(pos.y));
-    if (type !== 1) {
-        const depth = 12;
-        const isBottomEdge = gridY === GRID_ROWS - 1 || mapGrid[gridY + 1]?.[gridX] === 1;
-        const isLeftEdge = gridX === 0 || mapGrid[gridY][gridX - 1] === 1;
-        const isRightEdge = gridX === GRID_COLS - 1 || mapGrid[gridY][gridX + 1] === 1;
-        if (isLeftEdge) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(-TILE_W / 2, 0);
-            ctx.lineTo(-TILE_W / 2, depth);
-            ctx.lineTo(0, TILE_H / 2 + depth);
-            ctx.lineTo(0, TILE_H / 2);
-            ctx.closePath();
-            ctx.fillStyle = '#8B4513';
-            ctx.globalAlpha = 0.6;
-            ctx.fill();
-            ctx.restore();
-        }
-        if (isRightEdge) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(TILE_W / 2, 0);
-            ctx.lineTo(TILE_W / 2, depth);
-            ctx.lineTo(0, TILE_H / 2 + depth);
-            ctx.lineTo(0, TILE_H / 2);
-            ctx.closePath();
-            ctx.fillStyle = '#8B4513';
-            ctx.globalAlpha = 0.5;
-            ctx.fill();
-            ctx.restore();
-        }
-        if (isBottomEdge) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(-TILE_W / 2, 0);
-            ctx.lineTo(0, TILE_H / 2);
-            ctx.lineTo(TILE_W / 2, 0);
-            ctx.lineTo(TILE_W / 2, depth);
-            ctx.lineTo(0, TILE_H / 2 + depth);
-            ctx.lineTo(-TILE_W / 2, depth);
-            ctx.closePath();
-            ctx.fillStyle = '#8B4513';
-            ctx.globalAlpha = 0.7;
-            ctx.fill();
-            ctx.restore();
-        }
-    }
-    ctx.beginPath();
-    ctx.moveTo(0, -TILE_H / 2);
-    ctx.lineTo(TILE_W / 2, 0);
-    ctx.lineTo(0, TILE_H / 2);
-    ctx.lineTo(-TILE_W / 2, 0);
-    ctx.closePath();
+    // Gestion des obstacles avec images
     if (type === 1) {
-        ctx.fillStyle = '#7f8c8d';
-        ctx.shadowColor = '#222';
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#434c55';
-        ctx.stroke();
-    } else if (tileImageLoaded) {
-        ctx.save();
-        ctx.clip();
-        ctx.drawImage(tileImage, -TILE_W / 2, -TILE_H / 2, TILE_W, TILE_H);
-        ctx.restore();
+        // Alternance arbre/caisse selon la parité de la case
+        const useArbre = (gridX + gridY) % 2 === 0;
+        let img = null;
+        if (useArbre && window.arbreImage && window.arbreImage.complete) img = window.arbreImage;
+        if (!useArbre && window.caisseImage && window.caisseImage.complete) img = window.caisseImage;
+        if (img) {
+            ctx.save();
+            ctx.shadowColor = '#222';
+            ctx.shadowBlur = 8;
+            ctx.drawImage(img, -TILE_W/2, -TILE_H - 18, TILE_W, TILE_W * (img.height/img.width));
+            ctx.restore();
+        } else {
+            ctx.fillStyle = '#7f8c8d';
+            ctx.shadowColor = '#222';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(0, -TILE_H / 2);
+            ctx.lineTo(TILE_W / 2, 0);
+            ctx.lineTo(0, TILE_H / 2);
+            ctx.lineTo(-TILE_W / 2, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#434c55';
+            ctx.stroke();
+        }
     } else {
-        ctx.fillStyle = (gridX + gridY) % 2 === 0 ? '#b2f7ef' : '#f7d6e0';
-        ctx.shadowColor = '#222';
-        ctx.shadowBlur = 2;
-        ctx.fill();
+        if (type !== 1) {
+            const depth = 12;
+            const isBottomEdge = gridY === GRID_ROWS - 1 || mapGrid[gridY + 1]?.[gridX] === 1;
+            const isLeftEdge = gridX === 0 || mapGrid[gridY][gridX - 1] === 1;
+            const isRightEdge = gridX === GRID_COLS - 1 || mapGrid[gridY][gridX + 1] === 1;
+            if (isLeftEdge) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(-TILE_W / 2, 0);
+                ctx.lineTo(-TILE_W / 2, depth);
+                ctx.lineTo(0, TILE_H / 2 + depth);
+                ctx.lineTo(0, TILE_H / 2);
+                ctx.closePath();
+                ctx.fillStyle = '#8B4513';
+                ctx.globalAlpha = 0.6;
+                ctx.fill();
+                ctx.restore();
+            }
+            if (isRightEdge) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(TILE_W / 2, 0);
+                ctx.lineTo(TILE_W / 2, depth);
+                ctx.lineTo(0, TILE_H / 2 + depth);
+                ctx.lineTo(0, TILE_H / 2);
+                ctx.closePath();
+                ctx.fillStyle = '#8B4513';
+                ctx.globalAlpha = 0.5;
+                ctx.fill();
+                ctx.restore();
+            }
+            if (isBottomEdge) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(-TILE_W / 2, 0);
+                ctx.lineTo(0, TILE_H / 2);
+                ctx.lineTo(TILE_W / 2, 0);
+                ctx.lineTo(TILE_W / 2, depth);
+                ctx.lineTo(0, TILE_H / 2 + depth);
+                ctx.lineTo(-TILE_W / 2, depth);
+                ctx.closePath();
+                ctx.fillStyle = '#8B4513';
+                ctx.globalAlpha = 0.7;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+        ctx.beginPath();
+        ctx.moveTo(0, -TILE_H / 2);
+        ctx.lineTo(TILE_W / 2, 0);
+        ctx.lineTo(0, TILE_H / 2);
+        ctx.lineTo(-TILE_W / 2, 0);
+        ctx.closePath();
+        if (tileImageLoaded) {
+            ctx.save();
+            ctx.clip();
+            ctx.drawImage(tileImage, -TILE_W / 2, -TILE_H / 2, TILE_W, TILE_H);
+            ctx.restore();
+        } else {
+            ctx.fillStyle = (gridX + gridY) % 2 === 0 ? '#b2f7ef' : '#f7d6e0';
+            ctx.shadowColor = '#222';
+            ctx.shadowBlur = 2;
+            ctx.fill();
+        }
     }
     if (highlightColor) {
         ctx.shadowBlur = 0;

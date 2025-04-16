@@ -20,6 +20,12 @@ let playerImageLoaded = false;
 playerImage.src = 'iop.png';
 playerImage.onload = () => { playerImageLoaded = true; };
 
+// Chargement des images d'obstacles
+window.arbreImage = new window.Image();
+window.arbreImage.src = 'arbre.png';
+window.caisseImage = new window.Image();
+window.caisseImage.src = 'caisse.png';
+
 export function startGameLoop() {
     function gameLoop() {
         const canvas = document.getElementById('gameCanvas');
