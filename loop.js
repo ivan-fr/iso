@@ -1,10 +1,9 @@
 import { drawBackground, drawGrid, drawEntity, drawProjectiles, drawDamageAnimations, drawTile, drawHighlightTiles, drawEndGameOverlay, drawEntitiesSorted } from './draw.js';
 import { player, boss } from './entities.js';
 import { projectiles, damageAnimations, gameOver, gameTick, isMoving, isBossActing, playerState, reachableTiles, attackableTiles } from './game.js';
-import { SPELLS } from './spells.js';
+import { SPELLS, getSelectedSpellIndex } from './spells.js';
 import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, isoToScreen } from './grid.js';
 import { currentTurn, hoveredTile } from './game.js';
-import { selectedSpell } from './spells.js';
 import { hasLineOfSight } from './grid.js';
 
 // Image loading (mimic game_legacy.js)
@@ -34,7 +33,7 @@ export function startGameLoop() {
             attackableTiles,
             hoveredTile,
             SPELLS,
-            selectedSpell,
+            getSelectedSpellIndex(),
             TILE_W,
             TILE_H,
             GRID_COLS,

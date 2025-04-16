@@ -1,7 +1,7 @@
 import { player, boss, findPath, animateEntityPath as animateEntityPathEntities } from './entities.js';
-import { SPELLS, selectedSpell, setSelectedSpell } from './spells.js';
+import { SPELLS, setSelectedSpell, getSelectedSpellIndex } from './spells.js';
 import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
-import { showMessage, updateUI } from './ui.js';
+import { showMessage, updateAllUI, setupSpellBarListeners, playSound, updateTurnOrder, setupSpellTooltips, stopSound } from './ui.js';
 
 // Variables d'état globales
 export let currentTurn = 'player';
@@ -15,66 +15,25 @@ export let projectiles = [];
 export let hoveredTile = null;
 export let damageAnimations = [];
 
-// Helper: update spell bar selection UI
-function updateSpellBarSelection() {
-    for (let i = 0; i < 3; i++) {
-        const btn = document.getElementById('spell-btn-' + i);
-        if (btn) {
-            btn.style.outline = (i === selectedSpell) ? '3px solid #fff' : 'none';
-            btn.style.background = (i === selectedSpell) ? 'rgba(255,255,255,0.12)' : 'none';
-        }
-    }
-}
-
-function setupSpellBarListeners() {
-    for (let i = 0; i < 3; i++) {
-        const btn = document.getElementById('spell-btn-' + i);
-        if (btn) {
-            btn.addEventListener('click', function() {
-                setSelectedSpell(i);
-                updateSpellBarSelection();
-                showMessage(`Sort sélectionné : ${SPELLS[selectedSpell].name}`);
-                updateAllUI();
-            });
-        }
-    }
-    updateSpellBarSelection();
-}
-
-function updateAllUI() {
-    const turnIndicator = document.getElementById('turn-indicator');
-    const playerApDisplay = document.getElementById('player-ap');
-    const playerMpDisplay = document.getElementById('player-mp');
-    const bossApDisplay = document.getElementById('boss-ap');
-    const bossMpDisplay = document.getElementById('boss-mp');
-    const playerHealthBar = document.getElementById('player-health-bar');
-    const bossHealthBar = document.getElementById('boss-health-bar');
-    const endTurnButton = document.getElementById('endTurnButton');
-    updateUI(
-        turnIndicator,
-        playerApDisplay,
-        playerMpDisplay,
-        bossApDisplay,
-        bossMpDisplay,
+// Wrapper function for updateAllUI
+function updateAllUIWrapper() {
+    updateAllUI({
+        turnIndicator: document.getElementById('turn-indicator'),
+        playerApDisplay: document.getElementById('player-ap'),
+        playerMpDisplay: document.getElementById('player-mp'),
+        bossApDisplay: document.getElementById('boss-ap'),
+        bossMpDisplay: document.getElementById('boss-mp'),
         player,
         boss,
-        playerHealthBar,
-        bossHealthBar,
+        playerHealthBar: document.getElementById('player-health-bar'),
+        bossHealthBar: document.getElementById('boss-health-bar'),
         currentTurn,
         isMoving,
         isBossActing,
         playerState,
-        endTurnButton,
+        endTurnButton: document.getElementById('endTurnButton'),
         gameOver
-    );
-    // Cursor feedback like legacy
-    const canvas = document.getElementById('gameCanvas');
-    if (!canvas) return;
-    if (gameOver) canvas.style.cursor = 'default';
-    else if (currentTurn !== 'player' || isBossActing) canvas.style.cursor = 'default';
-    else if (playerState === 'aiming') canvas.style.cursor = 'crosshair';
-    else if (playerState === 'idle') canvas.style.cursor = 'pointer';
-    else canvas.style.cursor = 'default';
+    });
 }
 
 function endTurn() {
@@ -91,7 +50,9 @@ function startPlayerTurn() {
     reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
     attackableTiles = [];
     isBossActing = false;
-    updateAllUI();
+    updateAllUIWrapper();
+    updateTurnOrder(currentTurn);
+    playSound('turn');
     showMessage('Tour du Joueur', 1500);
 }
 
@@ -103,18 +64,18 @@ async function startBossTurn() {
     reachableTiles = [];
     attackableTiles = [];
     isBossActing = true;
-    updateAllUI();
+    updateAllUIWrapper();
+    updateTurnOrder(currentTurn);
+    playSound('turn');
     showMessage('Tour du Boss', 1500);
     await executeBossAI();
-    if (!gameOver) { endTurn(); } else { updateAllUI(); }
+    if (!gameOver) { endTurn(); } else { updateAllUIWrapper(); }
 }
 
 function handleKeyDown(e) {
     if (["1","2","3"].includes(e.key)) {
         setSelectedSpell(parseInt(e.key) - 1);
-        updateSpellBarSelection();
-        showMessage(`Sort sélectionné : ${SPELLS[selectedSpell].name}`);
-        updateAllUI();
+        updateAllUIWrapper();
         return;
     }
     if (gameOver || currentTurn !== 'player' || isMoving || isBossActing) return;
@@ -122,7 +83,7 @@ function handleKeyDown(e) {
         e.preventDefault();
         if (playerState === 'idle' && player.ap > 0) {
             playerState = 'aiming';
-            const spell = SPELLS[selectedSpell];
+            const spell = SPELLS[getSelectedSpellIndex()];
             let allTiles = getTilesInRangeBFS(player.gridX, player.gridY, spell.range ?? PLAYER_ATTACK_RANGE, null, player, boss);
             attackableTiles = allTiles.filter(tile => hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y));
             reachableTiles = [];
@@ -133,14 +94,14 @@ function handleKeyDown(e) {
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
             showMessage('Visée annulée', 1500);
         }
-        updateAllUI();
+        updateAllUIWrapper();
     } else if (e.key === 'Escape') {
         if (playerState === 'aiming') {
             playerState = 'idle';
             attackableTiles = [];
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
             showMessage('Visée annulée', 1500);
-            updateAllUI();
+            updateAllUIWrapper();
         }
     } else if (e.key.toLowerCase() === 'f') {
         if (playerState === 'idle') {
@@ -152,6 +113,7 @@ function handleKeyDown(e) {
 // Animate entity movement
 function animateEntityMove(entity, targetGridX, targetGridY, cost, onComplete) {
     isMoving = true;
+    playSound('move'); // Joue le son de déplacement
     const start = isoToScreen(entity.gridX, entity.gridY);
     const end = isoToScreen(targetGridX, targetGridY);
     const duration = 80 + 40 * cost;
@@ -169,6 +131,7 @@ function animateEntityMove(entity, targetGridX, targetGridY, cost, onComplete) {
             entity.screenX = final.x;
             entity.screenY = final.y;
             isMoving = false;
+            stopSound('move'); // Arrête le son de déplacement
             if (onComplete) onComplete();
         }
     }
@@ -187,7 +150,7 @@ function moveEntityTo(entity, targetGridX, targetGridY, cost, forceMove = false)
                 reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
             }
             isMoving = false;
-            updateAllUI();
+            updateAllUIWrapper();
         });
     } else {
         // No path, instant move (safety)
@@ -199,7 +162,7 @@ function moveEntityTo(entity, targetGridX, targetGridY, cost, forceMove = false)
         if (entity === player) {
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
         }
-        updateAllUI();
+        updateAllUIWrapper();
     }
 }
 
@@ -213,6 +176,7 @@ function showDamageAnimation(x, y, value, color = '#ffec3d') {
         time: 0,
         duration: 900
     });
+    playSound('damage');
 }
 
 function updateProjectiles() {
@@ -236,7 +200,7 @@ function updateProjectiles() {
                         showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, dmg, spell.color);
                         showMessage(`Boss touché ! (-${dmg} HP)`, 1000);
                         if (boss.hp <= 0) { boss.hp = 0; showMessage('Boss Vaincu ! VICTOIRE !', 5000); gameOver = true; }
-                        updateAllUI();
+                        updateAllUIWrapper();
                     }
                 } else if (p.spellIndex === 1) {
                     const affected = [
@@ -264,7 +228,7 @@ function updateProjectiles() {
                             showMessage('Boss Vaincu ! VICTOIRE !', 5000);
                             gameOver = true;
                         }
-                        updateAllUI();
+                        updateAllUIWrapper();
                     }
                 } else if (p.spellIndex === 2) {
                     // Only push if boss is exactly on the targeted tile (legacy behavior)
@@ -319,7 +283,7 @@ function updateProjectiles() {
                                 boss.hp -= bonus;
                                 showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, bonus, '#d63031');
                                 showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
-                                updateAllUI();
+                                updateAllUIWrapper();
                             }, 120);
                         } else if (pushed && !collision && (pushX !== boss.gridX || pushY !== boss.gridY)) {
                             boss.mp += 1;
@@ -331,7 +295,7 @@ function updateProjectiles() {
                             showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
                         }
                         if (boss.hp <= 0) { boss.hp = 0; showMessage('Boss Vaincu ! VICTOIRE !', 5000); gameOver = true; }
-                        updateAllUI();
+                        updateAllUIWrapper();
                     }
                 }
                 projectiles.splice(i, 1);
@@ -357,7 +321,7 @@ function updateProjectiles() {
                     showMessage('Joueur Vaincu ! GAME OVER', 5000);
                     gameOver = true;
                 }
-                updateAllUI();
+                updateAllUIWrapper();
                 continue;
             }
             const remainingDistX = p.targetScreenX - p.x;
@@ -411,7 +375,7 @@ function handleCanvasClick(event) {
             playerState = 'idle';
             attackableTiles = [];
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
-            updateAllUI();
+            updateAllUIWrapper();
         } else if (targetTile) {
             showMessage('Obstacle bloque la vue !');
         } else {
@@ -420,43 +384,74 @@ function handleCanvasClick(event) {
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
             showMessage('Visée annulée (clic hors portée)', 1500);
         }
-        updateAllUI();
+        updateAllUIWrapper();
     }
 }
 
 // --- Boss AI and Turn Logic ---
 async function executeBossAI() {
     let usedActionPoints = 0;
-    async function tryAttack() {
+    // 1. Essayer d'attaquer au CAC si possible
+    async function tryMeleeAttack() {
+        if (boss.ap <= 0) return false;
+        const dx = Math.abs(boss.gridX - player.gridX);
+        const dy = Math.abs(boss.gridY - player.gridY);
+        if ((dx + dy) === 1) { // Adjacent (portée 1)
+            boss.ap--;
+            const spell = SPELLS.find(s => s.bossOnly && s.range === 1);
+            if (spell) {
+                const dmg = spell.damage();
+                player.hp -= dmg;
+                showDamageAnimation(player.screenX, player.screenY - player.size / 2, dmg, spell.color);
+                showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
+                if (player.hp <= 0) {
+                    player.hp = 0;
+                    showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                    gameOver = true;
+                }
+                updateAllUIWrapper();
+                await delay(700);
+                return true;
+            }
+        }
+        return false;
+    }
+    // 2. Essayer d'attaquer à distance si possible
+    async function tryRangedAttack() {
         if (boss.ap <= 0) return false;
         const dx = boss.gridX - player.gridX;
         const dy = boss.gridY - player.gridY;
         const distToPlayerSq = dx * dx + dy * dy;
         if (distToPlayerSq <= BOSS_ATTACK_RANGE_SQ && hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY)) {
             bossAttackPlayer();
-            updateAllUI();
+            updateAllUIWrapper();
             await delay(800);
             usedActionPoints++;
             return true;
         }
         return false;
     }
-    // Try to attack as much as possible
+    // Priorité CAC
     while (usedActionPoints < MAX_ACTION_POINTS) {
-        const attacked = await tryAttack();
-        if (!attacked) break;
+        const melee = await tryMeleeAttack();
+        if (melee) { usedActionPoints++; continue; }
+        const ranged = await tryRangedAttack();
+        if (ranged) continue;
+        break;
     }
-    // If not all AP used, move and try to attack again
+    // Si pas tout utilisé, se rapprocher du joueur
     if (usedActionPoints < MAX_ACTION_POINTS && boss.mp > 0) {
         const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss, player, boss);
         let bestTile = null;
         let bestScore = -Infinity;
         for (const tile of bossReachable) {
             const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
+            const isAdjacent = distToPlayer === 1;
             const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
             const hasLoS = hasLineOfSight(tile.x, tile.y, player.gridX, player.gridY);
             let score = -distToPlayer * 10;
-            if (inAttackRange && hasLoS) score += 1000;
+            if (isAdjacent) score += 2000; // Priorité au CAC
+            else if (inAttackRange && hasLoS) score += 1000;
             score -= tile.cost * 5;
             if (score > bestScore) {
                 bestScore = score;
@@ -473,10 +468,44 @@ async function executeBossAI() {
                 waitMove();
             });
             await delay(500);
-            // Try to attack again after moving
+            // Réessayer d'attaquer au CAC après déplacement
             while (usedActionPoints < MAX_ACTION_POINTS) {
-                const attacked = await tryAttack();
-                if (!attacked) break;
+                const melee = await tryMeleeAttack();
+                if (melee) { usedActionPoints++; continue; }
+                const ranged = await tryRangedAttack();
+                if (ranged) continue;
+                break;
+            }
+        }
+        // Correction : si le boss peut atteindre une case adjacente au joueur, il doit le faire même si cela consomme tous ses PM
+        else {
+            // Cherche une case adjacente accessible au joueur
+            let foundAdj = null;
+            for (const tile of bossReachable) {
+                const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
+                if (distToPlayer === 1) {
+                    foundAdj = tile;
+                    break;
+                }
+            }
+            if (foundAdj) {
+                await new Promise(resolve => {
+                    moveEntityTo(boss, foundAdj.x, foundAdj.y, foundAdj.cost, true);
+                    function waitMove() {
+                        if (!isMoving) resolve();
+                        else setTimeout(waitMove, 10);
+                    }
+                    waitMove();
+                });
+                await delay(500);
+                // Réessayer d'attaquer au CAC après déplacement
+                while (usedActionPoints < MAX_ACTION_POINTS) {
+                    const melee = await tryMeleeAttack();
+                    if (melee) { usedActionPoints++; continue; }
+                    const ranged = await tryRangedAttack();
+                    if (ranged) continue;
+                    break;
+                }
             }
         }
     }
@@ -518,8 +547,8 @@ function bossAttackPlayer() {
 // --- Player Spell/Projectile Logic ---
 function playerAttack(targetGridX, targetGridY) {
     player.ap--;
-    updateAllUI();
-    const spell = SPELLS[selectedSpell];
+    updateAllUIWrapper();
+    const spell = SPELLS[getSelectedSpellIndex()];
     const startX = player.screenX;
     const startY = player.screenY - player.size / 2;
     const targetPos = isoToScreen(targetGridX, targetGridY);
@@ -540,9 +569,10 @@ function playerAttack(targetGridX, targetGridY) {
         targetScreenY: targetY,
         targetGridX,
         targetGridY,
-        spellIndex: selectedSpell,
+        spellIndex: getSelectedSpellIndex(),
         spellData: spell
     });
+    playSound('spell');
     showMessage(`Sort lancé : ${spell.name}`, 1000);
 }
 
@@ -595,7 +625,8 @@ function setupInputHandlers() {
 }
 
 export function initGame() {
-    setupSpellBarListeners();
+    setupSpellBarListeners(setSelectedSpell, getSelectedSpellIndex, SPELLS, showMessage, updateAllUIWrapper);
+    setupSpellTooltips(SPELLS);
     setupInputHandlers();
     player.screenX = isoToScreen(player.gridX, player.gridY).x;
     player.screenY = isoToScreen(player.gridX, player.gridY).y;
@@ -603,6 +634,8 @@ export function initGame() {
     boss.screenY = isoToScreen(boss.gridX, boss.gridY).y;
     reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
     attackableTiles = [];
-    updateAllUI();
+    updateAllUIWrapper();
+    updateTurnOrder(currentTurn);
+    playSound('turn'); // Play turn sound on initial game start
     showMessage('Bienvenue ! Combattez le boss.', 3000);
 }

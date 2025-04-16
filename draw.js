@@ -228,67 +228,95 @@ export function drawProjectiles(ctx, projectiles, SPELLS) {
     projectiles.forEach(p => {
         ctx.save();
         if (p.owner === 'player') {
-            // Use a default color if SPELLS or spellIndex is missing
             let spellColor = '#f1c40f';
             if (typeof p.spellIndex === 'number' && SPELLS && SPELLS[p.spellIndex]) {
                 spellColor = SPELLS[p.spellIndex].color;
             }
-            ctx.globalAlpha = 0.4;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-            ctx.fillStyle = spellColor;
-            ctx.fill();
-            // Mono-cible: étoile brillante qui tourne
+            // Glow effect
+            ctx.shadowColor = spellColor;
+            ctx.shadowBlur = 18;
+            // Mono-cible: étoile brillante qui tourne avec glow
             if (p.spellIndex === 0) {
-                ctx.globalAlpha = 1;
-                const angle = Date.now() / 200;
-                for (let i = 0; i < 4; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(
-                        p.x + Math.cos(angle + i * Math.PI / 2) * 12,
-                        p.y + Math.sin(angle + i * Math.PI / 2) * 12
-                    );
-                    ctx.strokeStyle = spellColor;
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-            } else if (p.spellIndex === 1) {
-                // Zone croix: cercles concentriques qui pulsent
-                const pulse = (Math.sin(Date.now() / 150) + 1) * 0.5;
-                ctx.globalAlpha = 0.5 - pulse * 0.3;
+                ctx.globalAlpha = 0.85;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, 10 + pulse * 5, 0, Math.PI * 2);
-                ctx.strokeStyle = spellColor;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            } else if (p.spellIndex === 2) {
-                // Poussée: traînée de particules coniques
-                ctx.globalAlpha = 0.6;
-                const angle = Math.atan2(p.dy, p.dx);
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y);
-                ctx.lineTo(
-                    p.x - Math.cos(angle) * 15 + Math.cos(angle + Math.PI/2) * 8,
-                    p.y - Math.sin(angle) * 15 + Math.sin(angle + Math.PI/2) * 8
-                );
-                ctx.lineTo(
-                    p.x - Math.cos(angle) * 15 + Math.cos(angle - Math.PI/2) * 8,
-                    p.y - Math.sin(angle) * 15 + Math.sin(angle - Math.PI/2) * 8
-                );
-                ctx.closePath();
+                ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
                 ctx.fillStyle = spellColor;
                 ctx.fill();
+                ctx.globalAlpha = 1;
+                const angle = Date.now() / 200;
+                for (let i = 0; i < 6; i++) {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(angle + i * Math.PI / 3);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, 18);
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.7;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            } else if (p.spellIndex === 1) {
+                // Zone croix: cercles concentriques qui pulsent + trailing effect
+                const pulse = (Math.sin(Date.now() / 150) + 1) * 0.5;
+                ctx.globalAlpha = 0.7;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 12 + pulse * 6, 0, Math.PI * 2);
+                ctx.fillStyle = spellColor;
+                ctx.fill();
+                ctx.globalAlpha = 0.4;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 22 + pulse * 8, 0, Math.PI * 2);
+                ctx.strokeStyle = spellColor;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                // Trail
+                for (let t = 1; t <= 4; t++) {
+                    ctx.globalAlpha = 0.12 * (1 - t / 5);
+                    ctx.beginPath();
+                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 10 + pulse * 4, 0, Math.PI * 2);
+                    ctx.fillStyle = spellColor;
+                    ctx.fill();
+                }
+            } else if (p.spellIndex === 2) {
+                // Poussée: cône dynamique + trailing particles
+                ctx.globalAlpha = 0.7;
+                const angle = Math.atan2(p.dy, p.dx);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-18, 10);
+                ctx.lineTo(-18, -10);
+                ctx.closePath();
+                ctx.fillStyle = spellColor;
+                ctx.shadowColor = '#fff';
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.restore();
+                // Trailing particles
+                for (let t = 1; t <= 5; t++) {
+                    ctx.globalAlpha = 0.13 * (1 - t / 6);
+                    ctx.beginPath();
+                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 7, 0, Math.PI * 2);
+                    ctx.fillStyle = spellColor;
+                    ctx.fill();
+                }
             }
         } else {
-            // Projectile du boss
-            ctx.fillStyle = '#e74c3c';
+            // Projectile du boss: red orb with pulse and trail
+            ctx.shadowColor = '#e74c3c';
+            ctx.shadowBlur = 12;
+            ctx.globalAlpha = 0.8;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
             ctx.fill();
             ctx.globalAlpha = 0.3;
             ctx.beginPath();
-            ctx.arc(p.x - p.dx * 2, p.y - p.dy * 2, 3, 0, Math.PI * 2);
+            ctx.arc(p.x - p.dx * 2, p.y - p.dy * 2, 5, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.restore();
