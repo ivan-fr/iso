@@ -126,6 +126,22 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
 
 // Fonction pour dessiner la grille
 export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded, entities = []) {
+    // On sépare entités animées et immobiles
+    const movingEntities = [];
+    const staticEntities = [];
+    for (const item of entities) {
+        // Si l'entité est en mouvement (screenX/Y != case cible), on la dessine après la grille
+        const pos = {
+            x: (TILE_W * 14) / 2 + (item.entity.gridX - item.entity.gridY) * (TILE_W / 2),
+            y: (TILE_H * 4) + (item.entity.gridX + item.entity.gridY) * (TILE_H / 2)
+        };
+        if (typeof item.entity.screenX === 'number' && typeof item.entity.screenY === 'number' && (Math.abs(item.entity.screenX - pos.x) > 1 || Math.abs(item.entity.screenY - pos.y) > 1)) {
+            movingEntities.push(item);
+        } else {
+            staticEntities.push(item);
+        }
+    }
+    // Dessin de la grille et des entités statiques (par case)
     for (let y = 0; y < GRID_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
             let highlight = null;
@@ -222,7 +238,7 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                 }
             }
             // On détermine s'il y a une entité sur cette case
-            const entityOnTile = entities.find(item => item.entity.gridX === x && item.entity.gridY === y);
+            const entityOnTile = staticEntities.find(item => item.entity.gridX === x && item.entity.gridY === y);
             // Si une entité animée est sur la case, on dessine la highlight AVANT l'entité, et pas après
             if (highlight && !entityOnTile) {
                 // Cas normal : highlight dessinée avec la tuile
@@ -278,6 +294,11 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                 drawEntity(ctx, entityOnTile.entity, entityOnTile.color, ...entityOnTile.args);
             }
         }
+    }
+    // Après la grille, dessiner les entités animées triées par screenY (z-index visuel)
+    movingEntities.sort((a, b) => (a.entity.screenY || 0) - (b.entity.screenY || 0));
+    for (const item of movingEntities) {
+        drawEntity(ctx, item.entity, item.color, ...item.args);
     }
 }
 
