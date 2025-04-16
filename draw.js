@@ -435,7 +435,6 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
         const drawX = screenX - imgWidth / 2;
         const drawY = screenY - imgHeight + (TILE_H / 2);
 
-        console.log('Bouftou image loaded:', screenX, screenY, imgHeight, imgWidth, TILE_W);
         ctx.drawImage(window.bouftouImage, drawX, drawY, imgWidth, imgHeight);
     } else {
         ctx.fillStyle = color;
