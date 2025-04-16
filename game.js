@@ -416,7 +416,39 @@ async function executeBossAI() {
         }
         return false;
     }
-    // 2. Essayer d'attaquer à distance si possible
+    // 2. Chercher à se déplacer vers une case adjacente au joueur si ce n'est pas déjà le cas
+    let isAdjacent = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1;
+    if (!isAdjacent && boss.mp > 0) {
+        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss, player, boss);
+        let foundAdj = null;
+        for (const tile of bossReachable) {
+            const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
+            if (distToPlayer === 1) {
+                foundAdj = tile;
+                break;
+            }
+        }
+        if (foundAdj) {
+            await new Promise(resolve => {
+                moveEntityTo(boss, foundAdj.x, foundAdj.y, foundAdj.cost, true);
+                function waitMove() {
+                    if (!isMoving) resolve();
+                    else setTimeout(waitMove, 10);
+                }
+                waitMove();
+            });
+            await delay(500);
+            // Après déplacement, retenter le CAC
+            while (usedActionPoints < MAX_ACTION_POINTS) {
+                const melee = await tryMeleeAttack();
+                if (melee) { usedActionPoints++; continue; }
+                break;
+            }
+            isBossActing = false;
+            return;
+        }
+    }
+    // 3. Si pas de CAC possible, attaquer à distance si possible
     async function tryRangedAttack() {
         if (boss.ap <= 0) return false;
         const dx = boss.gridX - player.gridX;
@@ -431,7 +463,7 @@ async function executeBossAI() {
         }
         return false;
     }
-    // Priorité CAC
+    // 4. Attaque à distance si possible
     while (usedActionPoints < MAX_ACTION_POINTS) {
         const melee = await tryMeleeAttack();
         if (melee) { usedActionPoints++; continue; }
@@ -439,19 +471,17 @@ async function executeBossAI() {
         if (ranged) continue;
         break;
     }
-    // Si pas tout utilisé, se rapprocher du joueur
+    // 5. Sinon, se rapprocher du joueur (comportement normal)
     if (usedActionPoints < MAX_ACTION_POINTS && boss.mp > 0) {
         const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss, player, boss);
         let bestTile = null;
         let bestScore = -Infinity;
         for (const tile of bossReachable) {
             const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
-            const isAdjacent = distToPlayer === 1;
             const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
             const hasLoS = hasLineOfSight(tile.x, tile.y, player.gridX, player.gridY);
             let score = -distToPlayer * 10;
-            if (isAdjacent) score += 2000; // Priorité au CAC
-            else if (inAttackRange && hasLoS) score += 1000;
+            if (inAttackRange && hasLoS) score += 1000;
             score -= tile.cost * 5;
             if (score > bestScore) {
                 bestScore = score;
@@ -468,44 +498,13 @@ async function executeBossAI() {
                 waitMove();
             });
             await delay(500);
-            // Réessayer d'attaquer au CAC après déplacement
+            // Réessayer d'attaquer après déplacement
             while (usedActionPoints < MAX_ACTION_POINTS) {
                 const melee = await tryMeleeAttack();
                 if (melee) { usedActionPoints++; continue; }
                 const ranged = await tryRangedAttack();
                 if (ranged) continue;
                 break;
-            }
-        }
-        // Correction : si le boss peut atteindre une case adjacente au joueur, il doit le faire même si cela consomme tous ses PM
-        else {
-            // Cherche une case adjacente accessible au joueur
-            let foundAdj = null;
-            for (const tile of bossReachable) {
-                const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
-                if (distToPlayer === 1) {
-                    foundAdj = tile;
-                    break;
-                }
-            }
-            if (foundAdj) {
-                await new Promise(resolve => {
-                    moveEntityTo(boss, foundAdj.x, foundAdj.y, foundAdj.cost, true);
-                    function waitMove() {
-                        if (!isMoving) resolve();
-                        else setTimeout(waitMove, 10);
-                    }
-                    waitMove();
-                });
-                await delay(500);
-                // Réessayer d'attaquer au CAC après déplacement
-                while (usedActionPoints < MAX_ACTION_POINTS) {
-                    const melee = await tryMeleeAttack();
-                    if (melee) { usedActionPoints++; continue; }
-                    const ranged = await tryRangedAttack();
-                    if (ranged) continue;
-                    break;
-                }
             }
         }
     }
