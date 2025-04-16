@@ -126,32 +126,15 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
 
 // Fonction pour dessiner la grille
 export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded, entities = []) {
-    // On sépare entités animées et immobiles
-    const movingEntities = [];
-    const staticEntities = [];
-    for (const item of entities) {
-        // Si l'entité est en mouvement (screenX/Y != case cible), on la dessine après la grille
-        const pos = {
-            x: (TILE_W * 14) / 2 + (item.entity.gridX - item.entity.gridY) * (TILE_W / 2),
-            y: (TILE_H * 4) + (item.entity.gridX + item.entity.gridY) * (TILE_H / 2)
-        };
-        if (typeof item.entity.screenX === 'number' && typeof item.entity.screenY === 'number' && (Math.abs(item.entity.screenX - pos.x) > 1 || Math.abs(item.entity.screenY - pos.y) > 1)) {
-            movingEntities.push(item);
-        } else {
-            staticEntities.push(item);
-        }
-    }
-    // Dessin de la grille et des entités statiques (par case)
+    // 1. Dessiner toutes les tuiles de sol et highlights (jamais d'obstacle ni d'entité ici)
     for (let y = 0; y < GRID_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
             let highlight = null;
-            // Highlight portée déplacement
             if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
                 highlight = 'rgba(46,204,113,0.22)';
             } else if (playerState === 'aiming' && attackableTiles.some(t => t.x === x && t.y === y)) {
                 highlight = 'rgba(52,152,219,0.22)';
             }
-            // Effet hover déplacement
             if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
                 if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
                     highlight = 'rgba(39, 174, 96, 0.75)';
@@ -161,7 +144,6 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     highlight = 'rgba(255,255,255,0.55)';
                 }
             }
-            // Effet zone d'effet du sort si hover en mode visée
             if (playerState === 'aiming' && hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
                 const spell = SPELLS[selectedSpell];
                 if (spell.aoe) {
@@ -175,7 +157,6 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
                             if (hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y)) {
-                                // Highlight AoE tile
                                 ctx.save();
                                 const pos = { x: (ctx.canvas.width / 2) + (tile.x - tile.y) * (TILE_W / 2), y: (TILE_H * 4) + (tile.x + tile.y) * (TILE_H / 2) };
                                 ctx.translate(Math.round(pos.x), Math.round(pos.y));
@@ -237,69 +218,82 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     }
                 }
             }
-            // On détermine s'il y a une entité sur cette case
-            const entityOnTile = staticEntities.find(item => item.entity.gridX === x && item.entity.gridY === y);
-            // Si une entité animée est sur la case, on dessine la highlight AVANT l'entité, et pas après
-            if (highlight && !entityOnTile) {
-                // Cas normal : highlight dessinée avec la tuile
-                drawTile(
-                    ctx,
-                    x,
-                    y,
-                    mapGrid[y] ? mapGrid[y][x] : 0,
-                    highlight,
-                    tileImage,
-                    tileImageLoaded,
-                    mapGrid,
-                    TILE_W,
-                    TILE_H,
-                    GRID_COLS,
-                    GRID_ROWS
-                );
-            } else {
-                // Pas de highlight, ou highlight mais entité présente : on dessine la tuile sans highlight
-                drawTile(
-                    ctx,
-                    x,
-                    y,
-                    mapGrid[y] ? mapGrid[y][x] : 0,
-                    null,
-                    tileImage,
-                    tileImageLoaded,
-                    mapGrid,
-                    TILE_W,
-                    TILE_H,
-                    GRID_COLS,
-                    GRID_ROWS
-                );
-            }
-            // Si highlight et entité présente, on dessine la highlight juste avant l'entité (sous l'entité)
-            if (highlight && entityOnTile) {
-                ctx.save();
+            // Dessine uniquement le sol et le highlight
+            drawTile(
+                ctx,
+                x,
+                y,
+                mapGrid[y] ? (mapGrid[y][x] === 1 ? 0 : mapGrid[y][x]) : 0,
+                highlight,
+                tileImage,
+                tileImageLoaded,
+                mapGrid,
+                TILE_W,
+                TILE_H,
+                GRID_COLS,
+                GRID_ROWS
+            );
+        }
+    }
+    // 2. Collecte tous les obstacles et entités à dessiner, avec leur screenY pour le tri z-index
+    let drawables = [];
+    // Obstacles
+    for (let y = 0; y < GRID_ROWS; y++) {
+        for (let x = 0; x < GRID_COLS; x++) {
+            if (mapGrid[y][x] === 1) {
                 const pos = { x: (ctx.canvas.width / 2) + (x - y) * (TILE_W / 2), y: (TILE_H * 4) + (x + y) * (TILE_H / 2) };
-                ctx.translate(Math.round(pos.x), Math.round(pos.y));
-                ctx.beginPath();
-                ctx.moveTo(0, -TILE_H / 2);
-                ctx.lineTo(TILE_W / 2, 0);
-                ctx.lineTo(0, TILE_H / 2);
-                ctx.lineTo(-TILE_W / 2, 0);
-                ctx.closePath();
-                ctx.fillStyle = highlight;
-                ctx.globalAlpha = 1;
-                ctx.fill();
-                ctx.restore();
-            }
-            // Entité
-            if (entityOnTile) {
-                drawEntity(ctx, entityOnTile.entity, entityOnTile.color, ...entityOnTile.args);
+                drawables.push({
+                    type: 'obstacle',
+                    x, y,
+                    screenY: pos.y,
+                    draw: () => {
+                        // Dessine le sol sous l'obstacle
+                        drawTile(ctx, x, y, 0, null, tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
+                        // Dessine l'obstacle
+                        ctx.save();
+                        ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                        const useArbre = (x + y) % 2 === 0;
+                        let img = null;
+                        if (useArbre && window.arbreImage && window.arbreImage.complete) img = window.arbreImage;
+                        if (!useArbre && window.caisseImage && window.caisseImage.complete) img = window.caisseImage;
+                        if (img) {
+                            ctx.shadowColor = '#222';
+                            ctx.shadowBlur = 8;
+                            ctx.drawImage(img, -TILE_W/2, -TILE_H - 18, TILE_W, TILE_W * (img.height/img.width));
+                        } else {
+                            ctx.fillStyle = '#7f8c8d';
+                            ctx.shadowColor = '#222';
+                            ctx.shadowBlur = 8;
+                            ctx.beginPath();
+                            ctx.moveTo(0, -TILE_H / 2);
+                            ctx.lineTo(TILE_W / 2, 0);
+                            ctx.lineTo(0, TILE_H / 2);
+                            ctx.lineTo(-TILE_W / 2, 0);
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.lineWidth = 2;
+                            ctx.strokeStyle = '#434c55';
+                            ctx.stroke();
+                        }
+                        ctx.restore();
+                    }
+                });
             }
         }
     }
-    // Après la grille, dessiner les entités animées triées par screenY (z-index visuel)
-    movingEntities.sort((a, b) => (a.entity.screenY || 0) - (b.entity.screenY || 0));
-    for (const item of movingEntities) {
-        drawEntity(ctx, item.entity, item.color, ...item.args);
+    // Entités (prend la position screenY réelle pour l'animation)
+    for (const item of entities) {
+        const screenY = (typeof item.entity.screenY === 'number') ? item.entity.screenY : ((TILE_H * 4) + (item.entity.gridX + item.entity.gridY) * (TILE_H / 2));
+        drawables.push({
+            type: 'entity',
+            screenY,
+            draw: () => drawEntity(ctx, item.entity, item.color, ...item.args)
+        });
     }
+    // 3. Trie tous les drawables par screenY croissant (z-index isométrique parfait)
+    drawables.sort((a, b) => a.screenY - b.screenY);
+    // 4. Dessine tous les drawables (obstacles et entités) dans l'ordre
+    for (const d of drawables) d.draw();
 }
 
 // Fonction pour dessiner une entité
