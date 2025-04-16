@@ -1,6 +1,6 @@
 import { player, boss, findPath, animateEntityPath as animateEntityPathEntities, bouftous } from './entities.js';
 import { SPELLS, setSelectedSpell, getSelectedSpellIndex } from './spells.js';
-import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
+import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight as hasLineOfSightRaw, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
 import { showMessage, updateAllUI, setupSpellBarListeners, playSound, updateTurnOrder, setupSpellTooltips, stopSound } from './ui.js';
 import { bouftouAI } from './ai.js';
 
@@ -19,6 +19,11 @@ export let bouftousState = bouftous.map(b => ({ ...b }));
 
 // Ajout : cases d'attaque accessibles pour le boss (cases bleues)
 let attackableTilesBoss = [];
+
+// Helper pour la LoS avec bouftous
+function hasLineOfSightAllEntities(startX, startY, endX, endY) {
+    return hasLineOfSightRaw(startX, startY, endX, endY, player, boss, bouftousState);
+}
 
 // Wrapper function for updateAllUI
 function updateAllUIWrapper() {
@@ -81,12 +86,14 @@ async function startBossTurn() {
 }
 
 async function startBouftouTurn() {
+    console.log('Début du tour des Bouftous');
     for (const b of bouftousState) {
         b.mp = 4;
         b.ap = 1;
     }
     for (const b of bouftousState) {
         if (b.hp <= 0) continue;
+        console.log('Bouftou joue:', b);
         await new Promise(resolve => {
             bouftouAI(b, animateEntityMove, (bouftou, target) => {
                 // Attaque CAC
@@ -96,6 +103,7 @@ async function startBouftouTurn() {
                 showMessage('Bouftou attaque ! (-' + dmg + ' HP)', 900);
                 if (target.hp <= 0) {
                     target.hp = 0;
+                    showDeathAnimation(target, '#bada55');
                     showMessage('Joueur Vaincu ! GAME OVER', 5000);
                     gameOver = true;
                 }
@@ -121,7 +129,7 @@ function handleKeyDown(e) {
             playerState = 'aiming';
             const spell = SPELLS[getSelectedSpellIndex()];
             let allTiles = getTilesInRangeBFS(player.gridX, player.gridY, spell.range ?? PLAYER_ATTACK_RANGE, null, player, boss);
-            attackableTiles = allTiles.filter(tile => hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y));
+            attackableTiles = allTiles.filter(tile => hasLineOfSightAllEntities(player.gridX, player.gridY, tile.x, tile.y));
             reachableTiles = [];
             showMessage('Mode Visée: Cliquez case bleue pour tirer (Echap pour annuler)', 3000);
         } else if (playerState === 'aiming') {
@@ -175,10 +183,21 @@ function animateEntityMove(entity, targetGridX, targetGridY, cost, onComplete) {
 }
 
 function moveEntityTo(entity, targetGridX, targetGridY, cost, forceMove = false) {
+    // Empêche d'aller sur la case d'une autre entité (sauf si forceMove pour poussée)
+    if (!forceMove) {
+        // Vérifie joueur
+        if (entity !== player && player.gridX === targetGridX && player.gridY === targetGridY) return;
+        // Vérifie boss
+        if (entity !== boss && boss.gridX === targetGridX && boss.gridY === targetGridY) return;
+        // Vérifie bouftous
+        for (const b of bouftousState) {
+            if (b !== entity && b.hp > 0 && b.gridX === targetGridX && b.gridY === targetGridY) return;
+        }
+    }
     if (isMoving || cost > entity.mp || gameOver || (entity === player && playerState !== 'idle' && !forceMove)) return;
     entity.mp -= cost;
     // Use A* pathfinding from entities.js for correct movement
-    const path = findPath(entity.gridX, entity.gridY, targetGridX, targetGridY, entity, isTileValidAndFree, player, boss);
+    const path = findPath(entity.gridX, entity.gridY, targetGridX, targetGridY, entity, (x, y, ent, p, b) => isTileValidAndFree(x, y, ent, player, boss, bouftousState), player, boss);
     if (path && path.length > 1) {
         isMoving = true;
         animateEntityPathEntities(entity, path, animateEntityMove, () => {
@@ -215,6 +234,33 @@ function showDamageAnimation(x, y, value, color = '#ffec3d') {
     playSound('damage');
 }
 
+// Animation de disparition d'entité (fade out + scale)
+function showDeathAnimation(entity, color = '#fff') {
+    let alpha = 1;
+    let scale = 1;
+    const duration = 900;
+    const start = performance.now();
+    function step(now) {
+        const t = Math.min(1, (now - start) / duration);
+        alpha = 1 - t;
+        scale = 1 + 0.5 * t;
+        entity._deathAlpha = alpha;
+        entity._deathScale = scale;
+        if (t < 1) {
+            requestAnimationFrame(step);
+        } else {
+            entity._deathAlpha = 0;
+            entity._deathScale = 1.5;
+            // Pour les bouftous, on les "retire" du jeu
+            if (entity !== player && entity !== boss) {
+                entity.hp = 0;
+                entity._removed = true;
+            }
+        }
+    }
+    requestAnimationFrame(step);
+}
+
 function updateProjectiles() {
     if (gameOver) return;
     for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -229,16 +275,43 @@ function updateProjectiles() {
             const moveDist = Math.sqrt(p.dx ** 2 + p.dy ** 2);
             if (dotProduct < 0 || remainingDist <= moveDist + 1) {
                 const spell = p.spellData;
+                // --- Mono-cible ---
                 if (p.spellIndex === 0) {
+                    // Bouftou touché ?
+                    let hit = false;
+                    for (const b of bouftousState) {
+                        if (b.hp > 0 && b.gridX === p.targetGridX && b.gridY === p.targetGridY) {
+                            const dmg = spell.damage();
+                            b.hp -= dmg;
+                            showDamageAnimation(b.screenX, b.screenY - b.size / 2, dmg, spell.color);
+                            showMessage(`Bouftou touché ! (-${dmg} HP)`, 1000);
+                            if (b.hp <= 0) {
+                                b.hp = 0;
+                                showDeathAnimation(b, spell.color);
+                            }
+                            updateAllUIWrapper();
+                            hit = true;
+                        }
+                    }
+                    // Boss touché ?
                     if (boss.gridX === p.targetGridX && boss.gridY === p.targetGridY) {
                         const dmg = spell.damage();
                         boss.hp -= dmg;
                         showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, dmg, spell.color);
                         showMessage(`Boss touché ! (-${dmg} HP)`, 1000);
-                        if (boss.hp <= 0) { boss.hp = 0; showMessage('Boss Vaincu ! VICTOIRE !', 5000); gameOver = true; }
+                        if (boss.hp <= 0) {
+                            boss.hp = 0;
+                            showDeathAnimation(boss, spell.color);
+                            showMessage('Boss Vaincu ! VICTOIRE !', 5000);
+                            gameOver = true;
+                        }
                         updateAllUIWrapper();
+                        hit = true;
                     }
-                } else if (p.spellIndex === 1) {
+                    // Si rien touché, on ne fait rien
+                }
+                // --- Zone croix ---
+                else if (p.spellIndex === 1) {
                     const affected = [
                         {x: p.targetGridX, y: p.targetGridY},
                         {x: p.targetGridX + 1, y: p.targetGridY},
@@ -249,30 +322,114 @@ function updateProjectiles() {
                     let hitCount = 0;
                     let totalDmg = 0;
                     for (const tile of affected) {
+                        for (const b of bouftousState) {
+                            if (b.hp > 0 && b.gridX === tile.x && b.gridY === tile.y) {
+                                const dmg = spell.damage();
+                                b.hp -= dmg;
+                                totalDmg += dmg;
+                                showDamageAnimation(b.screenX, b.screenY - b.size / 2, dmg, spell.color);
+                                hitCount++;
+                                if (b.hp <= 0) {
+                                    b.hp = 0;
+                                    showDeathAnimation(b, spell.color);
+                                }
+                            }
+                        }
                         if (boss.gridX === tile.x && boss.gridY === tile.y) {
                             const dmg = spell.damage();
                             boss.hp -= dmg;
                             totalDmg += dmg;
                             showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, dmg, spell.color);
                             hitCount++;
+                            if (boss.hp <= 0) {
+                                boss.hp = 0;
+                                showDeathAnimation(boss, spell.color);
+                                showMessage('Boss Vaincu ! VICTOIRE !', 5000);
+                                gameOver = true;
+                            }
                         }
                     }
                     if (hitCount > 0) {
-                        showMessage(`Boss touché ${hitCount} fois ! (-${totalDmg} HP total)`, 1000);
-                        if (boss.hp <= 0) {
-                            boss.hp = 0;
-                            showMessage('Boss Vaincu ! VICTOIRE !', 5000);
-                            gameOver = true;
-                        }
+                        showMessage(`Cible(s) touchée(s) ! (-${totalDmg} HP total)`, 1000);
                         updateAllUIWrapper();
                     }
-                } else if (p.spellIndex === 2) {
-                    // Only push if boss is exactly on the targeted tile (legacy behavior)
+                }
+                // --- Poussée ---
+                else if (p.spellIndex === 2) {
+                    // Bouftou ?
+                    for (const b of bouftousState) {
+                        if (b.hp > 0 && b.gridX === p.targetGridX && b.gridY === p.targetGridY) {
+                            const dmg = spell.damage();
+                            b.hp -= dmg;
+                            showDamageAnimation(b.screenX, b.screenY - b.size / 2, dmg, spell.color);
+                            // Calcul poussée
+                            let dx = p.targetGridX - player.gridX;
+                            let dy = p.targetGridY - player.gridY;
+                            if (dx === 0 && dy === 0) {
+                                dx = b.gridX - player.gridX;
+                                dy = b.gridY - player.gridY;
+                            }
+                            if (dx === 0 && dy === 0) dx = 1;
+                            if (Math.abs(dx) > Math.abs(dy)) { dx = Math.sign(dx); dy = 0; }
+                            else if (Math.abs(dy) > Math.abs(dx)) { dy = Math.sign(dy); dx = 0; }
+                            else if (dx !== 0) { dx = Math.sign(dx); dy = 0; }
+                            else if (dy !== 0) { dy = Math.sign(dy); dx = 0; }
+                            let pushX = b.gridX;
+                            let pushY = b.gridY;
+                            let collision = false;
+                            let pushed = false;
+                            let steps = 0;
+                            for (let step = 0; step < 2; step++) {
+                                const nextPushX = pushX + dx;
+                                const nextPushY = pushY + dy;
+                                if (
+                                    nextPushX < 0 || nextPushX >= GRID_COLS ||
+                                    nextPushY < 0 || nextPushY >= GRID_ROWS ||
+                                    mapGrid[nextPushY]?.[nextPushX] === 1 ||
+                                    (player.gridX === nextPushX && player.gridY === nextPushY) ||
+                                    (boss.gridX === nextPushX && boss.gridY === nextPushY) ||
+                                    bouftousState.some(other => other !== b && other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
+                                ) {
+                                    collision = true;
+                                    break;
+                                }
+                                pushX = nextPushX;
+                                pushY = nextPushY;
+                                pushed = true;
+                                steps++;
+                            }
+                            if (steps === 1 && collision) {
+                                b.mp += 1;
+                                moveEntityTo(b, pushX, pushY, 0, true);
+                                setTimeout(() => {
+                                    const bonus = 10 + Math.floor(Math.random() * 6); // 10-15
+                                    b.hp -= bonus;
+                                    showDamageAnimation(b.screenX, b.screenY - b.size / 2, bonus, '#d63031');
+                                    showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
+                                    updateAllUIWrapper();
+                                }, 120);
+                            } else if (pushed && !collision && (pushX !== b.gridX || pushY !== b.gridY)) {
+                                b.mp += 1;
+                                moveEntityTo(b, pushX, pushY, 0, true);
+                            } else if (collision) {
+                                const bonus = 10 + Math.floor(Math.random() * 6); // 10-15
+                                b.hp -= bonus;
+                                showDamageAnimation(b.screenX, b.screenY - b.size / 2, bonus, '#d63031');
+                                showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
+                            }
+                            if (b.hp <= 0) {
+                                b.hp = 0;
+                                showDeathAnimation(b, spell.color);
+                            }
+                            updateAllUIWrapper();
+                        }
+                    }
+                    // Boss ?
                     if (boss.gridX === p.targetGridX && boss.gridY === p.targetGridY) {
                         const dmg = spell.damage();
                         boss.hp -= dmg;
                         showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, dmg, spell.color);
-                        // Calculate push direction
+                        // Calcul poussée boss (identique à avant)
                         let dx = p.targetGridX - player.gridX;
                         let dy = p.targetGridY - player.gridY;
                         if (dx === 0 && dy === 0) {
@@ -280,15 +437,10 @@ function updateProjectiles() {
                             dy = boss.gridY - player.gridY;
                         }
                         if (dx === 0 && dy === 0) dx = 1;
-                        if (Math.abs(dx) > Math.abs(dy)) {
-                            dx = Math.sign(dx); dy = 0;
-                        } else if (Math.abs(dy) > Math.abs(dx)) {
-                            dy = Math.sign(dy); dx = 0;
-                        } else if (dx !== 0) {
-                            dx = Math.sign(dx); dy = 0;
-                        } else if (dy !== 0) {
-                            dy = Math.sign(dy); dx = 0;
-                        }
+                        if (Math.abs(dx) > Math.abs(dy)) { dx = Math.sign(dx); dy = 0; }
+                        else if (Math.abs(dy) > Math.abs(dx)) { dy = Math.sign(dy); dx = 0; }
+                        else if (dx !== 0) { dx = Math.sign(dx); dy = 0; }
+                        else if (dy !== 0) { dy = Math.sign(dy); dx = 0; }
                         let pushX = boss.gridX;
                         let pushY = boss.gridY;
                         let collision = false;
@@ -301,7 +453,8 @@ function updateProjectiles() {
                                 nextPushX < 0 || nextPushX >= GRID_COLS ||
                                 nextPushY < 0 || nextPushY >= GRID_ROWS ||
                                 mapGrid[nextPushY]?.[nextPushX] === 1 ||
-                                (player.gridX === nextPushX && player.gridY === nextPushY)
+                                (player.gridX === nextPushX && player.gridY === nextPushY) ||
+                                bouftousState.some(other => other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
                             ) {
                                 collision = true;
                                 break;
@@ -330,7 +483,12 @@ function updateProjectiles() {
                             showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, bonus, '#d63031');
                             showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
                         }
-                        if (boss.hp <= 0) { boss.hp = 0; showMessage('Boss Vaincu ! VICTOIRE !', 5000); gameOver = true; }
+                        if (boss.hp <= 0) {
+                            boss.hp = 0;
+                            showDeathAnimation(boss, spell.color);
+                            showMessage('Boss Vaincu ! VICTOIRE !', 5000);
+                            gameOver = true;
+                        }
                         updateAllUIWrapper();
                     }
                 }
@@ -341,19 +499,23 @@ function updateProjectiles() {
             p.y = nextY;
             continue;
         }
+        // Correction : attaque à distance du boss
         if (p.owner === 'boss') {
+            // Collision avec le joueur
             let targetEntity = player;
             const targetScreenPos = isoToScreen(targetEntity.gridX, targetEntity.gridY);
             let collisionCheckX = (typeof targetEntity.screenX === 'number') ? targetEntity.screenX : targetScreenPos.x;
             let collisionCheckY = (typeof targetEntity.screenY === 'number') ? targetEntity.screenY : targetScreenPos.y - targetEntity.size / 2;
             const distToTarget = Math.sqrt(Math.pow(p.x - collisionCheckX, 2) + Math.pow(p.y - (collisionCheckY - targetEntity.size / 2), 2));
             if (distToTarget < targetEntity.size * 0.7) {
-                targetEntity.hp -= BOSS_ATTACK_DAMAGE;
-                showDamageAnimation(collisionCheckX, collisionCheckY - targetEntity.size / 2, BOSS_ATTACK_DAMAGE, '#e74c3c');
+                const dmg = BOSS_ATTACK_DAMAGE;
+                targetEntity.hp -= dmg;
+                showDamageAnimation(collisionCheckX, collisionCheckY - targetEntity.size / 2, dmg, '#e74c3c');
                 projectiles.splice(i, 1);
                 showMessage('Joueur touché !', 1000);
                 if (player.hp <= 0) {
                     player.hp = 0;
+                    showDeathAnimation(player, '#e74c3c');
                     showMessage('Joueur Vaincu ! GAME OVER', 5000);
                     gameOver = true;
                 }
@@ -383,7 +545,7 @@ function handleCanvasClick(event) {
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
     let foundEntity = null;
-    [player, boss].forEach(entity => {
+    [player, boss, ...bouftousState].forEach(entity => {
         const sx = (typeof entity.screenX === 'number') ? entity.screenX : isoToScreen(entity.gridX, entity.gridY).x;
         const sy = (typeof entity.screenY === 'number') ? entity.screenY : isoToScreen(entity.gridX, entity.gridY).y;
         const radius = entity.size * 0.6;
@@ -405,8 +567,16 @@ function handleCanvasClick(event) {
             showMessage('Case invalide ou hors de portée.');
         }
     } else if (playerState === 'aiming') {
-        const targetTile = attackableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y);
-        if (targetTile && hasLineOfSight(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
+        // Correction : si on clique sur une entité, on force l'ajout de la case dans attackableTiles si elle est à portée et LoS
+        let targetTile = attackableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y);
+        if (!targetTile && foundEntity) {
+            const spell = SPELLS[getSelectedSpellIndex()];
+            const dist = Math.abs(player.gridX - foundEntity.gridX) + Math.abs(player.gridY - foundEntity.gridY);
+            if (dist <= (spell.range ?? PLAYER_ATTACK_RANGE) && hasLineOfSightAllEntities(player.gridX, player.gridY, foundEntity.gridX, foundEntity.gridY)) {
+                targetTile = { x: foundEntity.gridX, y: foundEntity.gridY };
+            }
+        }
+        if (targetTile && hasLineOfSightAllEntities(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
             playerAttack(targetTile.x, targetTile.y);
             playerState = 'idle';
             attackableTiles = [];
@@ -431,7 +601,7 @@ async function executeBossAI() {
     const spell = SPELLS.find(s => !s.bossOnly);
     if (spell) {
         let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
-        attackableTilesBoss = allTiles.filter(tile => hasLineOfSight(boss.gridX, boss.gridY, tile.x, tile.y));
+        attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
     } else {
         attackableTilesBoss = [];
     }
@@ -450,6 +620,7 @@ async function executeBossAI() {
                 showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
                 if (player.hp <= 0) {
                     player.hp = 0;
+                    showDeathAnimation(player, spell.color);
                     showMessage('Joueur Vaincu ! GAME OVER', 5000);
                     gameOver = true;
                 }
@@ -499,7 +670,7 @@ async function executeBossAI() {
         const spell = SPELLS.find(s => !s.bossOnly);
         if (spell) {
             let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
-            attackableTilesBoss = allTiles.filter(tile => hasLineOfSight(boss.gridX, boss.gridY, tile.x, tile.y));
+            attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
         } else {
             attackableTilesBoss = [];
         }
@@ -529,7 +700,7 @@ async function executeBossAI() {
         for (const tile of bossReachable) {
             const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
             const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
-            const hasLoS = hasLineOfSight(tile.x, tile.y, player.gridX, player.gridY);
+            const hasLoS = hasLineOfSightAllEntities(tile.x, tile.y, player.gridX, player.gridY);
             let score = -distToPlayer * 10;
             if (inAttackRange && hasLoS) score += 1000;
             score -= tile.cost * 5;

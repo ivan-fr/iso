@@ -146,12 +146,19 @@ export function screenToIso(screenX, screenY) {
     return { x: Math.max(0, Math.min(GRID_COLS - 1, gridX)), y: Math.max(0, Math.min(GRID_ROWS - 1, gridY)) };
 }
 
-export function isTileValidAndFree(x, y, movingEntity, player, boss) {
+// Nouvelle version : prend en compte toutes les entités comme obstacles
+export function isTileValidAndFree(x, y, movingEntity, player, boss, bouftousList = []) {
     if (x < 0 || x >= GRID_COLS || y < 0 || y >= GRID_ROWS) return false;
     if (mapGrid[y][x] === 1) return false;
-    if (movingEntity) {
-        const otherEntity = movingEntity === player ? boss : player;
-        if (otherEntity && x === otherEntity.gridX && y === otherEntity.gridY) return false;
+    // Empêche de marcher sur le joueur
+    if (player && movingEntity !== player && x === player.gridX && y === player.gridY) return false;
+    // Empêche de marcher sur le boss
+    if (boss && movingEntity !== boss && x === boss.gridX && y === boss.gridY) return false;
+    // Empêche de marcher sur un bouftou vivant (hors soi-même)
+    if (bouftousList && Array.isArray(bouftousList)) {
+        for (const b of bouftousList) {
+            if (b !== movingEntity && b.hp > 0 && x === b.gridX && y === b.gridY) return false;
+        }
     }
     return true;
 }
@@ -191,7 +198,7 @@ export function getTilesInRangeBFS(startX, startY, maxRange, entityCheckBlocking
     return reachable;
 }
 
-export function hasLineOfSight(startX, startY, endX, endY) {
+export function hasLineOfSight(startX, startY, endX, endY, player, boss, bouftousList = []) {
     let x1 = startX;
     let y1 = startY;
     const x2 = endX;
@@ -201,15 +208,25 @@ export function hasLineOfSight(startX, startY, endX, endY) {
     const sx = x1 < x2 ? 1 : -1;
     const sy = y1 < y2 ? 1 : -1;
     let err = dx + dy;
+
     while (true) {
-        if (x1 !== startX || y1 !== startY) {
-            if (x1 === endX && y1 === endY) break;
+        // On ne bloque PAS la case de destination (endX, endY)
+        if ((x1 !== startX || y1 !== startY) && (x1 !== endX || y1 !== endY)) {
+            // Vérifie les obstacles sur la grille
             if (x1 >= 0 && x1 < GRID_COLS && y1 >= 0 && y1 < GRID_ROWS) {
                 if (mapGrid[y1][x1] === 1) {
                     return false;
                 }
             } else {
                 return false;
+            }
+            // Vérifie les entités comme obstacles (hors cible)
+            if (player && x1 === player.gridX && y1 === player.gridY && (x1 !== endX || y1 !== endY)) return false;
+            if (boss && x1 === boss.gridX && y1 === boss.gridY && (x1 !== endX || y1 !== endY)) return false;
+            if (bouftousList && Array.isArray(bouftousList)) {
+                for (const b of bouftousList) {
+                    if (b.hp > 0 && x1 === b.gridX && y1 === b.gridY && (x1 !== endX || y1 !== endY)) return false;
+                }
             }
         }
         if (x1 === endX && y1 === endY) break;

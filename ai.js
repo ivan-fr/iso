@@ -1,5 +1,5 @@
 // AI pour les mobs Bouftou
-import { findPath } from './entities.js';
+import { findPath, animateEntityPath } from './entities.js';
 import { player } from './entities.js';
 import { isTileValidAndFree, GRID_COLS, GRID_ROWS } from './grid.js';
 
@@ -21,18 +21,34 @@ export async function bouftouAI(bouftou, animateEntityMove, onAttack, onComplete
         if (onComplete) onComplete();
         return;
     }
+    // Custom isTileValidAndFree for Bouftou pathfinding
+    function bouftouTileValid(x, y) {
+        // Autorise la case du joueur uniquement si c'est la destination
+        if (x === player.gridX && y === player.gridY) return true;
+        // Empêche de marcher sur les autres Bouftous
+        for (const other of [bouftou, ...window.bouftousState || []]) {
+            if (other !== bouftou && other.hp > 0 && other.gridX === x && other.gridY === y) return false;
+        }
+        // Empêche obstacles
+        return isTileValidAndFree(x, y, bouftou, player, null);
+    }
     // Sinon, déplacement intelligent vers le joueur
-    let path = findPath(bouftou.gridX, bouftou.gridY, player.gridX, player.gridY, bouftou, isTileValidAndFree, player, null);
+    let path = findPath(bouftou.gridX, bouftou.gridY, player.gridX, player.gridY, bouftou, bouftouTileValid, player, null);
+    console.log('Bouftou', bouftou.id, 'path:', path);
     if (path && path.length > 1) {
         // On ne va pas sur la case du joueur, on s'arrête à côté
         let maxMove = Math.min(bouftou.mp, path.length - 2);
+        console.log('Bouftou', bouftou.id, 'va tenter de se déplacer de', maxMove, 'cases');
         if (maxMove > 0) {
-            let nextStep = path[maxMove];
-            await new Promise(resolve => animateEntityMove(bouftou, nextStep.x, nextStep.y, maxMove, resolve));
-            bouftou.gridX = nextStep.x;
-            bouftou.gridY = nextStep.y;
+            // Animation étape par étape comme pour les autres entités
+            const subPath = path.slice(0, maxMove + 1);
+            await new Promise(resolve => animateEntityPath(bouftou, subPath, animateEntityMove, resolve));
+            bouftou.gridX = subPath[subPath.length - 1].x;
+            bouftou.gridY = subPath[subPath.length - 1].y;
             bouftou.mp -= maxMove;
         }
+    } else {
+        console.log('Bouftou', bouftou.id, 'aucun chemin trouvé ou déjà à côté du joueur');
     }
     // Vérifie à nouveau si on peut attaquer après déplacement
     dist = Math.abs(bouftou.gridX - player.gridX) + Math.abs(bouftou.gridY - player.gridY);
