@@ -1,6 +1,6 @@
 import { drawBackground, drawGrid, drawEntity, drawProjectiles, drawDamageAnimations, drawTile, drawEndGameOverlay } from './draw.js';
 import { player, boss } from './entities.js';
-import { projectiles, damageAnimations, gameOver, gameTick, isMoving, isBossActing, playerState, reachableTiles, attackableTiles } from './game.js';
+import { projectiles, damageAnimations, gameOver, gameTick, isMoving, isBossActing, playerState, reachableTiles, attackableTiles, bouftousState } from './game.js';
 import { SPELLS, getSelectedSpellIndex } from './spells.js';
 import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, isoToScreen } from './grid.js';
 import { currentTurn, hoveredTile } from './game.js';
@@ -25,6 +25,11 @@ window.arbreImage = new window.Image();
 window.arbreImage.src = 'arbre.png';
 window.caisseImage = new window.Image();
 window.caisseImage.src = 'caisse.png';
+
+// Chargement de l'image des Bouftous
+window.bouftouImage = new window.Image();
+window.bouftouImage.src = 'bouftou.png'; // chemin sans './' pour cohérence
+window.bouftouImage.onload = () => { window.bouftouImage.loaded = true; };
 
 export function startGameLoop() {
     function gameLoop() {
@@ -52,7 +57,8 @@ export function startGameLoop() {
             tileImageLoaded,
             [
                 { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
-                { entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }
+                { entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
+                ...bouftousState.map(b => ({ entity: b, color: '#bada55', args: [TILE_W, TILE_H, null, false, null, false, null] }))
             ]
         );
         drawProjectiles(ctx, projectiles, SPELLS);

@@ -372,6 +372,18 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
             draw: () => drawEntity(ctx, item.entity, item.color, ...item.args)
         });
     }
+    // Bouftous (utilise drawEntity pour cohérence)
+    if (typeof bouftous !== 'undefined') {
+        for (const b of bouftous) {
+            if (b.hp <= 0) continue;
+            const screenY = (typeof b.screenY === 'number') ? b.screenY : ((TILE_H * 4) + (b.gridX + b.gridY) * (TILE_H / 2));
+            drawables.push({
+                type: 'bouftou',
+                screenY,
+                draw: () => drawEntity(ctx, b, '#bada55', TILE_W, TILE_H, null, false, null, false, null)
+            });
+        }
+    }
     // 3. Trie tous les drawables par screenY croissant (z-index isométrique parfait)
     drawables.sort((a, b) => a.screenY - b.screenY);
     // 4. Dessine tous les drawables (obstacles et entités) dans l'ordre
@@ -384,6 +396,7 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
     let screenY = (typeof entity.screenY === 'number') ? entity.screenY : (TILE_H * 4 + (entity.gridX + entity.gridY) * (TILE_H / 2));
     entity.screenX = screenX;
     entity.screenY = screenY;
+
     // Ombre limitée à la case (clip losange)
     const zRatio = Math.max(0, Math.min(1, (entity.gridX + entity.gridY) / (TILE_W + TILE_H)));
     ctx.save();
@@ -402,6 +415,7 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
     ctx.fillStyle = '#000';
     ctx.fill();
     ctx.restore();
+
     if (entity.size === 36 && bossImageLoaded) {
         const imgWidth = TILE_W * 1.2;
         const imgHeight = bossImage.height * (imgWidth / bossImage.width);
@@ -414,12 +428,22 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
         const drawX = screenX - imgWidth / 2;
         const drawY = screenY - imgHeight + (TILE_H / 2);
         ctx.drawImage(playerImage, drawX, drawY, imgWidth, imgHeight);
+    } else if (entity.size === 26 && window.bouftouImage) {
+        // Bouftou
+        const imgWidth = TILE_W * 0.9;
+        const imgHeight = window.bouftouImage.height * (imgWidth / window.bouftouImage.width);
+        const drawX = screenX - imgWidth / 2;
+        const drawY = screenY - imgHeight + (TILE_H / 2);
+
+        console.log('Bouftou image loaded:', screenX, screenY, imgHeight, imgWidth, TILE_W);
+        ctx.drawImage(window.bouftouImage, drawX, drawY, imgWidth, imgHeight);
     } else {
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(screenX, screenY - entity.size / 2, entity.size / 2, 0, Math.PI * 2);
         ctx.fill();
     }
+
     if ((entity.size === 28 && currentTurn === 'player') || (entity.size === 36 && currentTurn === 'boss')) {
         ctx.save();
         ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300));
@@ -431,6 +455,7 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
         ctx.fill();
         ctx.restore();
     }
+
     if (entity.size === 28 && currentTurn === 'player') {
         ctx.save();
         ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300));

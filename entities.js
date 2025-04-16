@@ -51,6 +51,38 @@ export const boss = {
     screenY: null
 };
 
+// --- Bouftou mobs ---
+export const bouftous = [
+    {
+        id: 1,
+        gridX: 4,
+        gridY: 11,
+        size: 26,
+        hp: 40,
+        maxHp: 40,
+        mp: 4,
+        ap: 1,
+        screenX: null,
+        screenY: null,
+        image: 'bouftou.png',
+        aiType: 'bouftou',
+    },
+    {
+        id: 2,
+        gridX: 11,
+        gridY: 4,
+        size: 26,
+        hp: 40,
+        maxHp: 40,
+        mp: 4,
+        ap: 1,
+        screenX: null,
+        screenY: null,
+        image: 'bouftou.png',
+        aiType: 'bouftou',
+    }
+];
+
 // Pathfinding (A*)
 export function findPath(startX, startY, endX, endY, entity, isTileValidAndFree, player, boss) {
     if (startX === endX && startY === endY) return [{x: startX, y: startY}];

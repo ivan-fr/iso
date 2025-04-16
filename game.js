@@ -1,7 +1,8 @@
-import { player, boss, findPath, animateEntityPath as animateEntityPathEntities } from './entities.js';
+import { player, boss, findPath, animateEntityPath as animateEntityPathEntities, bouftous } from './entities.js';
 import { SPELLS, setSelectedSpell, getSelectedSpellIndex } from './spells.js';
 import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
 import { showMessage, updateAllUI, setupSpellBarListeners, playSound, updateTurnOrder, setupSpellTooltips, stopSound } from './ui.js';
+import { bouftouAI } from './ai.js';
 
 // Variables d'état globales
 export let currentTurn = 'player';
@@ -14,6 +15,7 @@ export let gameOver = false;
 export let projectiles = [];
 export let hoveredTile = null;
 export let damageAnimations = [];
+export let bouftousState = bouftous.map(b => ({ ...b }));
 
 // Ajout : cases d'attaque accessibles pour le boss (cases bleues)
 let attackableTilesBoss = [];
@@ -35,13 +37,15 @@ function updateAllUIWrapper() {
         isBossActing,
         playerState,
         endTurnButton: document.getElementById('endTurnButton'),
-        gameOver
+        gameOver,
+        bouftous: bouftousState
     });
 }
 
 function endTurn() {
     if (isMoving || isBossActing || gameOver || playerState !== 'idle') return;
     if (currentTurn === 'player') startBossTurn();
+    else if (currentTurn === 'boss') startBouftouTurn();
     else startPlayerTurn();
 }
 
@@ -74,6 +78,34 @@ async function startBossTurn() {
     showMessage('Tour du Boss', 1500);
     await executeBossAI();
     if (!gameOver) { endTurn(); } else { updateAllUIWrapper(); }
+}
+
+async function startBouftouTurn() {
+    for (const b of bouftousState) {
+        b.mp = 4;
+        b.ap = 1;
+    }
+    for (const b of bouftousState) {
+        if (b.hp <= 0) continue;
+        await new Promise(resolve => {
+            bouftouAI(b, animateEntityMove, (bouftou, target) => {
+                // Attaque CAC
+                const dmg = 9 + Math.floor(Math.random() * 4); // 9-12
+                target.hp -= dmg;
+                showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, '#bada55');
+                showMessage('Bouftou attaque ! (-' + dmg + ' HP)', 900);
+                if (target.hp <= 0) {
+                    target.hp = 0;
+                    showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                    gameOver = true;
+                }
+                updateAllUIWrapper();
+            }, resolve);
+        });
+        if (gameOver) break;
+    }
+    if (!gameOver) startPlayerTurn();
+    else updateAllUIWrapper();
 }
 
 function handleKeyDown(e) {
@@ -649,6 +681,10 @@ export function initGame() {
     player.screenY = isoToScreen(player.gridX, player.gridY).y;
     boss.screenX = isoToScreen(boss.gridX, boss.gridY).x;
     boss.screenY = isoToScreen(boss.gridX, boss.gridY).y;
+    bouftousState.forEach(b => {
+        b.screenX = isoToScreen(b.gridX, b.gridY).x;
+        b.screenY = isoToScreen(b.gridX, b.gridY).y;
+    });
     reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss);
     attackableTiles = [];
     updateAllUIWrapper();
