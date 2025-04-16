@@ -34,50 +34,7 @@ export function setSelectedSpell(index) {
     selectedSpell = index;
 }
 
-// Gestion des sorts, logique d'attaque, sélection
-
-const spells = {
-    fireball: {
-        name: "Fireball",
-        damage: 50,
-        manaCost: 30,
-        description: "Lance une boule de feu infligeant des dégâts importants."
-    },
-    iceSpike: {
-        name: "Ice Spike",
-        damage: 30,
-        manaCost: 20,
-        description: "Projette un pic de glace qui ralentit l'ennemi."
-    },
-    heal: {
-        name: "Heal",
-        damage: 0,
-        manaCost: 25,
-        description: "Restaure une partie des points de vie."
-    }
-};
-
-function castSpell(spellName, caster, target) {
-    const spell = spells[spellName];
-    if (!spell) {
-        console.error("Sort inconnu:", spellName);
-        return;
-    }
-
-    if (caster.mana < spell.manaCost) {
-        console.error("Mana insuffisant pour lancer le sort:", spellName);
-        return;
-    }
-
-    caster.mana -= spell.manaCost;
-
-    if (spell.damage > 0) {
-        target.health -= spell.damage;
-        console.log(`${caster.name} inflige ${spell.damage} points de dégâts à ${target.name} avec ${spell.name}.`);
-    } else {
-        caster.health += spell.damage; // spell.damage is 0 for heal
-        console.log(`${caster.name} utilise ${spell.name} et restaure des points de vie.`);
-    }
+// Utility to get current spell
+export function getSelectedSpell() {
+    return SPELLS[selectedSpell];
 }
-
-export { spells, castSpell };

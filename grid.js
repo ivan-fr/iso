@@ -151,7 +151,7 @@ export function isTileValidAndFree(x, y, movingEntity, player, boss) {
     if (mapGrid[y][x] === 1) return false;
     if (movingEntity) {
         const otherEntity = movingEntity === player ? boss : player;
-        if (x === otherEntity.gridX && y === otherEntity.gridY) return false;
+        if (otherEntity && x === otherEntity.gridX && y === otherEntity.gridY) return false;
     }
     return true;
 }

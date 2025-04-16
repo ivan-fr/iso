@@ -1,4 +1,6 @@
 // --- Entités principales ---
+import { GRID_COLS, GRID_ROWS } from './grid.js';
+
 export class Entity {
     constructor(gridX, gridY, size, hp, maxHp, mp, ap) {
         this.gridX = gridX;
@@ -38,8 +40,8 @@ export const player = {
 };
 
 export const boss = {
-    gridX: 11,
-    gridY: 11,
+    gridX: GRID_COLS - 3,
+    gridY: GRID_ROWS - 3,
     size: 36,
     hp: 150,
     maxHp: 150,
@@ -50,7 +52,7 @@ export const boss = {
 };
 
 // Pathfinding (A*)
-export function findPath(startX, startY, endX, endY, entity, isTileValidAndFree) {
+export function findPath(startX, startY, endX, endY, entity, isTileValidAndFree, player, boss) {
     if (startX === endX && startY === endY) return [{x: startX, y: startY}];
     const open = [];
     const closed = new Set();
@@ -81,7 +83,7 @@ export function findPath(startX, startY, endX, endY, entity, isTileValidAndFree)
             {x: current.x, y: current.y - 1}
         ];
         for (const n of neighbors) {
-            if (!isTileValidAndFree(n.x, n.y, entity)) continue;
+            if (!isTileValidAndFree(n.x, n.y, entity, player, boss)) continue;
             const nKey = key(n.x, n.y);
             if (closed.has(nKey)) continue;
             const tentativeG = gScore[key(current.x, current.y)] + 1;

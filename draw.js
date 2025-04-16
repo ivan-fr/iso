@@ -2,7 +2,11 @@
 
 // Fonction pour dessiner une tuile isométrique
 export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS) {
-    const pos = { x: (TILE_W * GRID_COLS) / 2 + (gridX - gridY) * (TILE_W / 2), y: TILE_H * 4 + (gridX + gridY) * (TILE_H / 2) };
+    // Calculate position with proper centering
+    const pos = { 
+        x: (ctx.canvas.width / 2) + (gridX - gridY) * (TILE_W / 2),
+        y: (TILE_H * 4) + (gridX + gridY) * (TILE_H / 2)
+    };
     ctx.save();
     ctx.translate(Math.round(pos.x), Math.round(pos.y));
     if (type !== 1) {
