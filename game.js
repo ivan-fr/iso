@@ -610,18 +610,7 @@ function drawProjectiles() {
 
 // --- UI Sorts ---
 function drawSpellUI() {
-    ctx.save();
-    ctx.font = 'bold 13px "Press Start 2P", Arial';
-    ctx.textAlign = 'left';
-    ctx.globalAlpha = 0.92;
-    for (let i = 0; i < SPELLS.length; i++) {
-        const spell = SPELLS[i];
-        ctx.fillStyle = i === selectedSpell ? spell.color : '#888';
-        ctx.fillRect(12 + i * 120, 8, 110, 32);
-        ctx.fillStyle = '#222';
-        ctx.fillText(`${spell.key}: ${spell.name}`, 20 + i * 120, 30);
-    }
-    ctx.restore();
+    // Ne rien dessiner, la sélection se fait uniquement via les boutons SVG
 }
 
 // --- Game Logic ---
@@ -871,36 +860,28 @@ function updateProjectiles() {
                         // Calcul direction de poussée consolidé
                         let dx = p.targetGridX - player.gridX;
                         let dy = p.targetGridY - player.gridY;
-                        // Si le joueur vise la case du boss ou une case adjacente sans direction claire
                         if (dx === 0 && dy === 0) {
-                            // Prend la direction boss -> joueur si possible
                             dx = boss.gridX - player.gridX;
                             dy = boss.gridY - player.gridY;
                         }
-                        // Si toujours pas de direction, pousse à droite par défaut
                         if (dx === 0 && dy === 0) dx = 1;
-                        // Privilégie la direction dominante (axe principal)
                         if (Math.abs(dx) > Math.abs(dy)) {
-                            dx = Math.sign(dx);
-                            dy = 0;
+                            dx = Math.sign(dx); dy = 0;
                         } else if (Math.abs(dy) > Math.abs(dx)) {
-                            dy = Math.sign(dy);
-                            dx = 0;
+                            dy = Math.sign(dy); dx = 0;
                         } else if (dx !== 0) {
-                            dx = Math.sign(dx);
-                            dy = 0;
+                            dx = Math.sign(dx); dy = 0;
                         } else if (dy !== 0) {
-                            dy = Math.sign(dy);
-                            dx = 0;
+                            dy = Math.sign(dy); dx = 0;
                         }
                         let pushX = boss.gridX;
                         let pushY = boss.gridY;
                         let collision = false;
                         let pushed = false;
+                        let steps = 0;
                         for (let step = 0; step < 2; step++) {
                             const nextPushX = pushX + dx;
                             const nextPushY = pushY + dy;
-                            // Vérifie si la case suivante est libre (pas d'obstacle, pas hors map, pas sur le joueur)
                             if (
                                 nextPushX < 0 || nextPushX >= GRID_COLS ||
                                 nextPushY < 0 || nextPushY >= GRID_ROWS ||
@@ -913,13 +894,24 @@ function updateProjectiles() {
                             pushX = nextPushX;
                             pushY = nextPushY;
                             pushed = true;
+                            steps++;
                         }
-                        if (pushed && !collision && (pushX !== boss.gridX || pushY !== boss.gridY)) {
-                            // On pousse le boss (ne pas décrémenter mp du boss)
-                            boss.mp += 1; // pour éviter la décrémentation dans moveEntityTo
+                        if (steps === 1 && collision) {
+                            // On pousse d'une case puis collision
+                            boss.mp += 1;
+                            moveEntityTo(boss, pushX, pushY, 0, true);
+                            setTimeout(() => {
+                                const bonus = 10 + Math.floor(Math.random() * 6); // 10-15
+                                boss.hp -= bonus;
+                                showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, bonus, '#d63031');
+                                showMessage(`Dégâts de collision ! (-${bonus} HP)`, 1000);
+                                updateUI();
+                            }, 120); // attendre que l'animation de déplacement se fasse
+                        } else if (pushed && !collision && (pushX !== boss.gridX || pushY !== boss.gridY)) {
+                            boss.mp += 1;
                             moveEntityTo(boss, pushX, pushY, 0, true);
                         } else if (collision) {
-                            // Dégâts de collision
+                            // Dégâts de collision sans déplacement
                             const bonus = 10 + Math.floor(Math.random() * 6); // 10-15
                             boss.hp -= bonus;
                             showDamageAnimation(boss.screenX, boss.screenY - boss.size / 2, bonus, '#d63031');
@@ -1066,7 +1058,22 @@ function handleCanvasClick(event) {
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
-    const clickedGrid = screenToIso(clickX, clickY);
+    // Détection entité sous la souris (pour viser l'entité même si on clique sur son image)
+    let foundEntity = null;
+    [player, boss].forEach(entity => {
+        const sx = (typeof entity.screenX === 'number') ? entity.screenX : isoToScreen(entity.gridX, entity.gridY).x;
+        const sy = (typeof entity.screenY === 'number') ? entity.screenY : isoToScreen(entity.gridX, entity.gridY).y;
+        const radius = entity.size * 0.6;
+        if (Math.pow(clickX - sx, 2) + Math.pow(clickY - (sy - entity.size / 2), 2) < radius * radius) {
+            foundEntity = entity;
+        }
+    });
+    let clickedGrid;
+    if (foundEntity) {
+        clickedGrid = { x: foundEntity.gridX, y: foundEntity.gridY };
+    } else {
+        clickedGrid = screenToIso(clickX, clickY);
+    }
     if (playerState === 'idle') {
         const targetTile = reachableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y && tile.cost <= player.mp);
         if (targetTile) {
@@ -1104,8 +1111,23 @@ canvas.addEventListener('mousemove', function(event) {
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
-    const grid = screenToIso(mouseX, mouseY);
-    hoveredTile = { x: grid.x, y: grid.y };
+    // Détection entité sous la souris
+    let foundEntity = null;
+    [player, boss].forEach(entity => {
+        const sx = (typeof entity.screenX === 'number') ? entity.screenX : isoToScreen(entity.gridX, entity.gridY).x;
+        const sy = (typeof entity.screenY === 'number') ? entity.screenY : isoToScreen(entity.gridX, entity.gridY).y;
+        // On considère un cercle autour de l'entité
+        const radius = entity.size * 0.6;
+        if (Math.pow(mouseX - sx, 2) + Math.pow(mouseY - (sy - entity.size / 2), 2) < radius * radius) {
+            foundEntity = entity;
+        }
+    });
+    if (foundEntity) {
+        hoveredTile = { x: foundEntity.gridX, y: foundEntity.gridY };
+    } else {
+        const grid = screenToIso(mouseX, mouseY);
+        hoveredTile = { x: grid.x, y: grid.y };
+    }
 });
 canvas.addEventListener('mouseleave', function() {
     hoveredTile = null;
