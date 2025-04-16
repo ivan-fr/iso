@@ -86,7 +86,7 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
 }
 
 // Fonction pour dessiner la grille
-export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile) {
+export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded) {
     for (let y = 0; y < GRID_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
             let highlight = null;
@@ -120,9 +120,9 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
                             if (hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y)) {
-                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.65)');
+                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.65)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
                             } else {
-                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(120, 120, 120, 0.35)');
+                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(120, 120, 120, 0.35)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
                             }
                         }
                     }
@@ -143,12 +143,25 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                             nextPushY < 0 || nextPushY >= GRID_ROWS ||
                             mapGrid[nextPushY]?.[nextPushX] === 1
                         ) break;
-                        drawTile(ctx, nextPushX, nextPushY, mapGrid[nextPushY][nextPushX], 'rgba(0,184,148,0.55)');
+                        drawTile(ctx, nextPushX, nextPushY, mapGrid[nextPushY][nextPushX], 'rgba(0,184,148,0.55)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
                         pushX = nextPushX; pushY = nextPushY;
                     }
                 }
             }
-            drawTile(ctx, x, y, mapGrid[y][x], highlight);
+            drawTile(
+                ctx,
+                x,
+                y,
+                mapGrid[y] ? mapGrid[y][x] : 0,
+                highlight,
+                tileImage,
+                tileImageLoaded,
+                mapGrid,
+                TILE_W,
+                TILE_H,
+                GRID_COLS,
+                GRID_ROWS
+            );
         }
     }
 }
@@ -211,12 +224,17 @@ export function drawProjectiles(ctx, projectiles, SPELLS) {
     projectiles.forEach(p => {
         ctx.save();
         if (p.owner === 'player') {
-            const spell = SPELLS[p.spellIndex];
+            // Use a default color if SPELLS or spellIndex is missing
+            let spellColor = '#f1c40f';
+            if (typeof p.spellIndex === 'number' && SPELLS && SPELLS[p.spellIndex]) {
+                spellColor = SPELLS[p.spellIndex].color;
+            }
             ctx.globalAlpha = 0.4;
             ctx.beginPath();
             ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-            ctx.fillStyle = spell.color;
+            ctx.fillStyle = spellColor;
             ctx.fill();
+            // Mono-cible: étoile brillante qui tourne
             if (p.spellIndex === 0) {
                 ctx.globalAlpha = 1;
                 const angle = Date.now() / 200;
@@ -227,19 +245,21 @@ export function drawProjectiles(ctx, projectiles, SPELLS) {
                         p.x + Math.cos(angle + i * Math.PI / 2) * 12,
                         p.y + Math.sin(angle + i * Math.PI / 2) * 12
                     );
-                    ctx.strokeStyle = spell.color;
+                    ctx.strokeStyle = spellColor;
                     ctx.lineWidth = 2;
                     ctx.stroke();
                 }
             } else if (p.spellIndex === 1) {
+                // Zone croix: cercles concentriques qui pulsent
                 const pulse = (Math.sin(Date.now() / 150) + 1) * 0.5;
                 ctx.globalAlpha = 0.5 - pulse * 0.3;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, 10 + pulse * 5, 0, Math.PI * 2);
-                ctx.strokeStyle = spell.color;
+                ctx.strokeStyle = spellColor;
                 ctx.lineWidth = 2;
                 ctx.stroke();
             } else if (p.spellIndex === 2) {
+                // Poussée: traînée de particules coniques
                 ctx.globalAlpha = 0.6;
                 const angle = Math.atan2(p.dy, p.dx);
                 ctx.beginPath();
@@ -253,10 +273,11 @@ export function drawProjectiles(ctx, projectiles, SPELLS) {
                     p.y - Math.sin(angle) * 15 + Math.sin(angle - Math.PI/2) * 8
                 );
                 ctx.closePath();
-                ctx.fillStyle = spell.color;
+                ctx.fillStyle = spellColor;
                 ctx.fill();
             }
         } else {
+            // Projectile du boss
             ctx.fillStyle = '#e74c3c';
             ctx.beginPath();
             ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
@@ -297,4 +318,59 @@ export function drawBackground(ctx, canvas) {
     grad.addColorStop(1, '#fed6e3');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// Draw highlight tiles for movement/attack (like legacy drawHighlightTiles)
+export function drawHighlightTiles(ctx, currentTurn, isMoving, isBossActing, gameOver, playerState, reachableTiles, attackableTiles, player, TILE_W, TILE_H, isoToScreen) {
+    if (currentTurn !== 'player' || isMoving || isBossActing || gameOver) return;
+    const highlightLayer = (tileX, tileY, color) => {
+        const pos = isoToScreen(tileX, tileY);
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.beginPath();
+        ctx.moveTo(0, -TILE_H / 2);
+        ctx.lineTo(TILE_W / 2, 0);
+        ctx.lineTo(0, TILE_H / 2);
+        ctx.lineTo(-TILE_W / 2, 0);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.restore();
+    };
+    if (playerState === 'idle') {
+        reachableTiles.forEach(tile => {
+            if (tile.cost <= player.mp) {
+                highlightLayer(tile.x, tile.y, 'rgba(46, 204, 113, 0.5)');
+            }
+        });
+    } else if (playerState === 'aiming') {
+        attackableTiles.forEach(tile => {
+            highlightLayer(tile.x, tile.y, 'rgba(52, 152, 219, 0.5)');
+        });
+    }
+}
+
+// Draw end game overlay (like legacy drawEndGame)
+export function drawEndGameOverlay(ctx, canvas, gameOver, player) {
+    if (gameOver) {
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = player.hp > 0 ? '#2ecc71' : '#e74c3c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        ctx.font = '32px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#222';
+        ctx.shadowBlur = 12;
+        ctx.fillText(player.hp > 0 ? 'VICTOIRE !' : 'GAME OVER', canvas.width / 2, canvas.height / 2);
+        ctx.restore();
+    }
+}
+
+// Utility: sort and draw entities by Y (for correct isometric overlap)
+export function drawEntitiesSorted(ctx, entities, drawEntityFn) {
+    entities.sort((a, b) => (a.entity.screenY || 0) - (b.entity.screenY || 0));
+    entities.forEach(item => drawEntityFn(ctx, item.entity, item.color, ...item.args));
 }
