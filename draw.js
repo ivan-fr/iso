@@ -11,7 +11,20 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
     ctx.translate(Math.round(pos.x), Math.round(pos.y));
     // Gestion des obstacles avec images
     if (type === 1) {
-        // Alternance arbre/caisse selon la parité de la case
+        // D'abord, dessiner la tuile de sol sous l'obstacle
+        if (tileImageLoaded) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(0, -TILE_H / 2);
+            ctx.lineTo(TILE_W / 2, 0);
+            ctx.lineTo(0, TILE_H / 2);
+            ctx.lineTo(-TILE_W / 2, 0);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(tileImage, -TILE_W / 2, -TILE_H / 2, TILE_W, TILE_H);
+            ctx.restore();
+        }
+        // Ensuite, dessiner l'obstacle (arbre/caisse)
         const useArbre = (gridX + gridY) % 2 === 0;
         let img = null;
         if (useArbre && window.arbreImage && window.arbreImage.complete) img = window.arbreImage;
@@ -112,7 +125,7 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
 }
 
 // Fonction pour dessiner la grille
-export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded) {
+export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded, entities = []) {
     for (let y = 0; y < GRID_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
             let highlight = null;
@@ -146,9 +159,32 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
                             if (hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y)) {
-                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.65)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
+                                // Highlight AoE tile
+                                ctx.save();
+                                const pos = { x: (ctx.canvas.width / 2) + (tile.x - tile.y) * (TILE_W / 2), y: (TILE_H * 4) + (tile.x + tile.y) * (TILE_H / 2) };
+                                ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                                ctx.beginPath();
+                                ctx.moveTo(0, -TILE_H / 2);
+                                ctx.lineTo(TILE_W / 2, 0);
+                                ctx.lineTo(0, TILE_H / 2);
+                                ctx.lineTo(-TILE_W / 2, 0);
+                                ctx.closePath();
+                                ctx.fillStyle = 'rgba(230, 126, 34, 0.65)';
+                                ctx.fill();
+                                ctx.restore();
                             } else {
-                                drawTile(ctx, tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(120, 120, 120, 0.35)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
+                                ctx.save();
+                                const pos = { x: (ctx.canvas.width / 2) + (tile.x - tile.y) * (TILE_W / 2), y: (TILE_H * 4) + (tile.x + tile.y) * (TILE_H / 2) };
+                                ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                                ctx.beginPath();
+                                ctx.moveTo(0, -TILE_H / 2);
+                                ctx.lineTo(TILE_W / 2, 0);
+                                ctx.lineTo(0, TILE_H / 2);
+                                ctx.lineTo(-TILE_W / 2, 0);
+                                ctx.closePath();
+                                ctx.fillStyle = 'rgba(120, 120, 120, 0.35)';
+                                ctx.fill();
+                                ctx.restore();
                             }
                         }
                     }
@@ -169,7 +205,18 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                             nextPushY < 0 || nextPushY >= GRID_ROWS ||
                             mapGrid[nextPushY]?.[nextPushX] === 1
                         ) break;
-                        drawTile(ctx, nextPushX, nextPushY, mapGrid[nextPushY][nextPushX], 'rgba(0,184,148,0.55)', tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
+                        ctx.save();
+                        const pos = { x: (ctx.canvas.width / 2) + (nextPushX - nextPushY) * (TILE_W / 2), y: (TILE_H * 4) + (nextPushX + nextPushY) * (TILE_H / 2) };
+                        ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                        ctx.beginPath();
+                        ctx.moveTo(0, -TILE_H / 2);
+                        ctx.lineTo(TILE_W / 2, 0);
+                        ctx.lineTo(0, TILE_H / 2);
+                        ctx.lineTo(-TILE_W / 2, 0);
+                        ctx.closePath();
+                        ctx.fillStyle = 'rgba(0,184,148,0.55)';
+                        ctx.fill();
+                        ctx.restore();
                         pushX = nextPushX; pushY = nextPushY;
                     }
                 }
@@ -188,6 +235,12 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                 GRID_COLS,
                 GRID_ROWS
             );
+            // Ajout : dessiner l'entité présente sur cette case juste après la tuile
+            for (const item of entities) {
+                if (item.entity.gridX === x && item.entity.gridY === y) {
+                    drawEntity(ctx, item.entity, item.color, ...item.args);
+                }
+            }
         }
     }
 }
@@ -372,36 +425,6 @@ export function drawBackground(ctx, canvas) {
     grad.addColorStop(1, '#fed6e3');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-// Draw highlight tiles for movement/attack (like legacy drawHighlightTiles)
-export function drawHighlightTiles(ctx, currentTurn, isMoving, isBossActing, gameOver, playerState, reachableTiles, attackableTiles, player, TILE_W, TILE_H, isoToScreen) {
-    if (currentTurn !== 'player' || isMoving || isBossActing || gameOver) return;
-    const highlightLayer = (tileX, tileY, color) => {
-        const pos = isoToScreen(tileX, tileY);
-        ctx.save();
-        ctx.translate(pos.x, pos.y);
-        ctx.beginPath();
-        ctx.moveTo(0, -TILE_H / 2);
-        ctx.lineTo(TILE_W / 2, 0);
-        ctx.lineTo(0, TILE_H / 2);
-        ctx.lineTo(-TILE_W / 2, 0);
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.restore();
-    };
-    if (playerState === 'idle') {
-        reachableTiles.forEach(tile => {
-            if (tile.cost <= player.mp) {
-                highlightLayer(tile.x, tile.y, 'rgba(46, 204, 113, 0.5)');
-            }
-        });
-    } else if (playerState === 'aiming') {
-        attackableTiles.forEach(tile => {
-            highlightLayer(tile.x, tile.y, 'rgba(52, 152, 219, 0.5)');
-        });
-    }
 }
 
 // Draw end game overlay (like legacy drawEndGame)

@@ -1,4 +1,4 @@
-import { drawBackground, drawGrid, drawEntity, drawProjectiles, drawDamageAnimations, drawTile, drawHighlightTiles, drawEndGameOverlay, drawEntitiesSorted } from './draw.js';
+import { drawBackground, drawGrid, drawEntity, drawProjectiles, drawDamageAnimations, drawTile, drawEndGameOverlay } from './draw.js';
 import { player, boss } from './entities.js';
 import { projectiles, damageAnimations, gameOver, gameTick, isMoving, isBossActing, playerState, reachableTiles, attackableTiles } from './game.js';
 import { SPELLS, getSelectedSpellIndex } from './spells.js';
@@ -49,27 +49,12 @@ export function startGameLoop() {
             null, // getTilesInRangeBFS (not used in drawGrid)
             drawTile,
             tileImage,
-            tileImageLoaded
+            tileImageLoaded,
+            [
+                { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
+                { entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }
+            ]
         );
-        drawHighlightTiles(
-            ctx,
-            currentTurn,
-            isMoving,
-            isBossActing,
-            gameOver,
-            playerState,
-            reachableTiles,
-            attackableTiles,
-            player,
-            TILE_W,
-            TILE_H,
-            isoToScreen
-        );
-        // Draw entities sorted by Y for correct overlap
-        drawEntitiesSorted(ctx, [
-            { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
-            { entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }
-        ], drawEntity);
         drawProjectiles(ctx, projectiles, SPELLS);
         drawDamageAnimations(ctx, damageAnimations);
         drawEndGameOverlay(ctx, canvas, gameOver, player);
