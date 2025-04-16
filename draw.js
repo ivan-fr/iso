@@ -451,92 +451,142 @@ export function drawProjectiles(ctx, projectiles, SPELLS) {
             if (typeof p.spellIndex === 'number' && SPELLS && SPELLS[p.spellIndex]) {
                 spellColor = SPELLS[p.spellIndex].color;
             }
-            // Glow effect
-            ctx.shadowColor = spellColor;
-            ctx.shadowBlur = 18;
-            // Mono-cible: étoile brillante qui tourne avec glow
+            // --- Nouveau design stylé pour chaque sort ---
             if (p.spellIndex === 0) {
-                ctx.globalAlpha = 0.85;
+                // Mono-cible : étoile lumineuse animée avec traînée
+                ctx.globalAlpha = 0.92;
+                const angle = Date.now() / 180;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(angle);
+                // Étoile centrale
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+                for (let i = 0; i < 8; i++) {
+                    const r = i % 2 === 0 ? 13 : 6;
+                    ctx.lineTo(Math.cos(i * Math.PI / 4) * r, Math.sin(i * Math.PI / 4) * r);
+                }
+                ctx.closePath();
+                ctx.shadowColor = spellColor;
+                ctx.shadowBlur = 18;
                 ctx.fillStyle = spellColor;
                 ctx.fill();
-                ctx.globalAlpha = 1;
-                const angle = Date.now() / 200;
-                for (let i = 0; i < 6; i++) {
+                // Halo
+                ctx.globalAlpha = 0.25;
+                ctx.beginPath();
+                ctx.arc(0, 0, 18, 0, Math.PI * 2);
+                ctx.fillStyle = spellColor;
+                ctx.fill();
+                ctx.restore();
+                // Traînée lumineuse
+                for (let t = 1; t <= 5; t++) {
+                    ctx.globalAlpha = 0.10 * (1 - t / 6);
+                    ctx.beginPath();
+                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = spellColor;
+                    ctx.fill();
+                }
+            } else if (p.spellIndex === 1) {
+                // Zone croix : orbe pulsante avec éclairs
+                const pulse = (Math.sin(Date.now() / 120) + 1) * 0.5;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                // Orbe centrale
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath();
+                ctx.arc(0, 0, 13 + pulse * 4, 0, Math.PI * 2);
+                ctx.fillStyle = spellColor;
+                ctx.shadowColor = spellColor;
+                ctx.shadowBlur = 16;
+                ctx.fill();
+                // Éclairs croisés
+                ctx.globalAlpha = 0.7;
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2.2;
+                for (let i = 0; i < 4; i++) {
                     ctx.save();
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate(angle + i * Math.PI / 3);
+                    ctx.rotate(i * Math.PI / 2 + pulse * 0.2);
                     ctx.beginPath();
                     ctx.moveTo(0, 0);
-                    ctx.lineTo(0, 18);
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2;
-                    ctx.globalAlpha = 0.7;
+                    ctx.lineTo(0, 22 + pulse * 6);
                     ctx.stroke();
                     ctx.restore();
                 }
-            } else if (p.spellIndex === 1) {
-                // Zone croix: cercles concentriques qui pulsent + trailing effect
-                const pulse = (Math.sin(Date.now() / 150) + 1) * 0.5;
-                ctx.globalAlpha = 0.7;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 12 + pulse * 6, 0, Math.PI * 2);
-                ctx.fillStyle = spellColor;
-                ctx.fill();
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 22 + pulse * 8, 0, Math.PI * 2);
-                ctx.strokeStyle = spellColor;
-                ctx.lineWidth = 3;
-                ctx.stroke();
-                // Trail
+                ctx.restore();
+                // Traînée d'orbes
                 for (let t = 1; t <= 4; t++) {
-                    ctx.globalAlpha = 0.12 * (1 - t / 5);
+                    ctx.globalAlpha = 0.10 * (1 - t / 5);
                     ctx.beginPath();
-                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 10 + pulse * 4, 0, Math.PI * 2);
+                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 10 + pulse * 2, 0, Math.PI * 2);
                     ctx.fillStyle = spellColor;
                     ctx.fill();
                 }
             } else if (p.spellIndex === 2) {
-                // Poussée: cône dynamique + trailing particles
-                ctx.globalAlpha = 0.7;
+                // Poussée : flèche verte stylisée, plus marquée et dynamique
+                ctx.globalAlpha = 0.92;
                 const angle = Math.atan2(p.dy, p.dx);
                 ctx.save();
                 ctx.translate(p.x, p.y);
                 ctx.rotate(angle);
+                // Corps de la flèche
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
-                ctx.lineTo(-18, 10);
-                ctx.lineTo(-18, -10);
+                ctx.lineTo(-28, 12);
+                ctx.lineTo(-20, 0);
+                ctx.lineTo(-28, -12);
                 ctx.closePath();
-                ctx.fillStyle = spellColor;
-                ctx.shadowColor = '#fff';
-                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#00ff88';
+                ctx.shadowBlur = 22;
+                ctx.fillStyle = '#00ff88';
                 ctx.fill();
-                ctx.restore();
-                // Trailing particles
-                for (let t = 1; t <= 5; t++) {
-                    ctx.globalAlpha = 0.13 * (1 - t / 6);
+                // Tige de la flèche
+                ctx.globalAlpha = 0.7;
+                ctx.beginPath();
+                ctx.moveTo(-20, 0);
+                ctx.lineTo(-40, 0);
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#00b894';
+                ctx.shadowColor = '#00b894';
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                // Effet de vent stylisé
+                ctx.globalAlpha = 0.18;
+                for (let i = 1; i <= 3; i++) {
                     ctx.beginPath();
-                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 7, 0, Math.PI * 2);
-                    ctx.fillStyle = spellColor;
+                    ctx.ellipse(-10 * i, 0, 8 - i * 1.5, 4 + i, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00ff88';
+                    ctx.fill();
+                }
+                ctx.restore();
+                // Traînée verte
+                for (let t = 1; t <= 6; t++) {
+                    ctx.globalAlpha = 0.09 * (1 - t / 7);
+                    ctx.beginPath();
+                    ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00ff88';
                     ctx.fill();
                 }
             }
         } else {
-            // Projectile du boss: red orb with pulse and trail
+            // Projectile du boss: orbe rouge pulsante avec traînée
             ctx.shadowColor = '#e74c3c';
-            ctx.shadowBlur = 12;
-            ctx.globalAlpha = 0.8;
+            ctx.shadowBlur = 14;
+            ctx.globalAlpha = 0.85;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
             ctx.fillStyle = '#e74c3c';
             ctx.fill();
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.25;
             ctx.beginPath();
-            ctx.arc(p.x - p.dx * 2, p.y - p.dy * 2, 5, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
             ctx.fill();
+            // Traînée
+            for (let t = 1; t <= 4; t++) {
+                ctx.globalAlpha = 0.10 * (1 - t / 5);
+                ctx.beginPath();
+                ctx.arc(p.x - p.dx * t * 3, p.y - p.dy * t * 3, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#e74c3c';
+                ctx.fill();
+            }
         }
         ctx.restore();
     });
