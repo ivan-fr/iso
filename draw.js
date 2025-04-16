@@ -200,38 +200,6 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                             }
                         }
                     }
-                } else if (spell.push) {
-                    // Affiche la zone de poussée UNIQUEMENT dans la direction du joueur vers la case ciblée
-                    let dx = x - player.gridX;
-                    let dy = y - player.gridY;
-                    if (dx === 0 && dy === 0) { dx = 1; dy = 0; }
-                    if (Math.abs(dx) > Math.abs(dy)) { dx = Math.sign(dx); dy = 0; }
-                    else if (Math.abs(dy) > Math.abs(dx)) { dy = Math.sign(dy); dx = 0; }
-                    else if (dx !== 0) { dx = Math.sign(dx); dy = 0; }
-                    else if (dy !== 0) { dy = Math.sign(dy); dx = 0; }
-                    let pushX = x, pushY = y;
-                    for (let step = 0; step < 2; step++) {
-                        const nextPushX = pushX + dx;
-                        const nextPushY = pushY + dy;
-                        if (
-                            nextPushX < 0 || nextPushX >= GRID_COLS ||
-                            nextPushY < 0 || nextPushY >= GRID_ROWS ||
-                            mapGrid[nextPushY]?.[nextPushX] === 1
-                        ) break;
-                        ctx.save();
-                        const pos = { x: (ctx.canvas.width / 2) + (nextPushX - nextPushY) * (TILE_W / 2), y: (TILE_H * 4) + (nextPushX + nextPushY) * (TILE_H / 2) };
-                        ctx.translate(Math.round(pos.x), Math.round(pos.y));
-                        ctx.beginPath();
-                        ctx.moveTo(0, -TILE_H / 2);
-                        ctx.lineTo(TILE_W / 2, 0);
-                        ctx.lineTo(0, TILE_H / 2);
-                        ctx.lineTo(-TILE_W / 2, 0);
-                        ctx.closePath();
-                        ctx.fillStyle = 'rgba(0,184,148,0.55)';
-                        ctx.fill();
-                        ctx.restore();
-                        pushX = nextPushX; pushY = nextPushY;
-                    }
                 }
             }
             // Dessine uniquement le sol et le highlight
@@ -251,6 +219,78 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
             );
         }
     }
+
+    // --- Affichage de la zone de poussée par-dessus les tuiles ---
+    if (playerState === 'aiming' && hoveredTile) {
+        const spell = SPELLS[selectedSpell];
+        if (spell && spell.push) {
+            let x = hoveredTile.x;
+            let y = hoveredTile.y;
+            let dx = x - player.gridX;
+            let dy = y - player.gridY;
+            if (!(dx === 0 && dy === 0)) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    dx = Math.sign(dx); dy = 0;
+                } else if (Math.abs(dy) > Math.abs(dx)) {
+                    dy = Math.sign(dy); dx = 0;
+                } else if (dx !== 0) {
+                    dx = Math.sign(dx); dy = 0;
+                } else if (dy !== 0) {
+                    dy = Math.sign(dy); dx = 0;
+                }
+                let pushX = x;
+                let pushY = y;
+                for (let step = 0; step < 3; step++) {
+                    if (
+                        pushX < 0 || pushX >= GRID_COLS ||
+                        pushY < 0 || pushY >= GRID_ROWS ||
+                        mapGrid[pushY]?.[pushX] === 1
+                    ) break;
+                    ctx.save();
+                    const pos = { x: (ctx.canvas.width / 2) + (pushX - pushY) * (TILE_W / 2), y: (TILE_H * 4) + (pushX + pushY) * (TILE_H / 2) };
+                    ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                    ctx.beginPath();
+                    ctx.moveTo(0, -TILE_H / 2);
+                    ctx.lineTo(TILE_W / 2, 0);
+                    ctx.lineTo(0, TILE_H / 2);
+                    ctx.lineTo(-TILE_W / 2, 0);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(0,184,148,0.55)';
+                    ctx.fill();
+                    ctx.restore();
+                    pushX += dx; pushY += dy;
+                }
+            }
+        } else if (spell && spell.aoe) {
+            // Affichage de la zone en croix par-dessus les tuiles
+            const x = hoveredTile.x;
+            const y = hoveredTile.y;
+            const aoeTiles = [
+                {x: x, y: y},
+                {x: x + 1, y: y},
+                {x: x - 1, y: y},
+                {x: x, y: y + 1},
+                {x: x, y: y - 1}
+            ];
+            for (const tile of aoeTiles) {
+                if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
+                    ctx.save();
+                    const pos = { x: (ctx.canvas.width / 2) + (tile.x - tile.y) * (TILE_W / 2), y: (TILE_H * 4) + (tile.x + tile.y) * (TILE_H / 2) };
+                    ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                    ctx.beginPath();
+                    ctx.moveTo(0, -TILE_H / 2);
+                    ctx.lineTo(TILE_W / 2, 0);
+                    ctx.lineTo(0, TILE_H / 2);
+                    ctx.lineTo(-TILE_W / 2, 0);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(230, 126, 34, 0.65)';
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+    }
+
     // 2. Collecte tous les obstacles et entités à dessiner, avec leur screenY pour le tri z-index
     let drawables = [];
     // Obstacles
