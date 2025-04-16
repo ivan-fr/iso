@@ -15,6 +15,9 @@ export let projectiles = [];
 export let hoveredTile = null;
 export let damageAnimations = [];
 
+// Ajout : cases d'attaque accessibles pour le boss (cases bleues)
+let attackableTilesBoss = [];
+
 // Wrapper function for updateAllUI
 function updateAllUIWrapper() {
     updateAllUI({
@@ -63,6 +66,7 @@ async function startBossTurn() {
     boss.ap = MAX_ACTION_POINTS;
     reachableTiles = [];
     attackableTiles = [];
+    attackableTilesBoss = [];
     isBossActing = true;
     updateAllUIWrapper();
     updateTurnOrder(currentTurn);
@@ -391,6 +395,14 @@ function handleCanvasClick(event) {
 // --- Boss AI and Turn Logic ---
 async function executeBossAI() {
     let usedActionPoints = 0;
+    // Génère les cases bleues d'attaque pour le boss (comme pour le joueur)
+    const spell = SPELLS.find(s => !s.bossOnly);
+    if (spell) {
+        let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
+        attackableTilesBoss = allTiles.filter(tile => hasLineOfSight(boss.gridX, boss.gridY, tile.x, tile.y));
+    } else {
+        attackableTilesBoss = [];
+    }
     // 1. Essayer d'attaquer au CAC si possible
     async function tryMeleeAttack() {
         if (boss.ap <= 0) return false;
@@ -451,10 +463,16 @@ async function executeBossAI() {
     // 3. Si pas de CAC possible, attaquer à distance si possible
     async function tryRangedAttack() {
         if (boss.ap <= 0) return false;
-        const dx = boss.gridX - player.gridX;
-        const dy = boss.gridY - player.gridY;
-        const distToPlayerSq = dx * dx + dy * dy;
-        if (distToPlayerSq <= BOSS_ATTACK_RANGE_SQ && hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY)) {
+        // Regénère les cases bleues à chaque tentative (le joueur peut avoir bougé)
+        const spell = SPELLS.find(s => !s.bossOnly);
+        if (spell) {
+            let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
+            attackableTilesBoss = allTiles.filter(tile => hasLineOfSight(boss.gridX, boss.gridY, tile.x, tile.y));
+        } else {
+            attackableTilesBoss = [];
+        }
+        const canAttack = attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY);
+        if (canAttack) {
             bossAttackPlayer();
             updateAllUIWrapper();
             await delay(800);
