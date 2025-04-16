@@ -29,11 +29,25 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
         let img = null;
         if (useArbre && window.arbreImage && window.arbreImage.complete) img = window.arbreImage;
         if (!useArbre && window.caisseImage && window.caisseImage.complete) img = window.caisseImage;
+        
         if (img) {
             ctx.save();
             ctx.shadowColor = '#222';
             ctx.shadowBlur = 8;
-            ctx.drawImage(img, -TILE_W/2, -TILE_H - 18, TILE_W, TILE_W * (img.height/img.width));
+            
+            if (useArbre) {
+                // Trees are taller and slightly larger
+                const treeWidth = TILE_W * 0.9;  // 90% of tile width
+                const treeHeight = img.height * (treeWidth / img.width);
+                const verticalOffset = -TILE_H - treeHeight * 0.8; // Higher placement for trees
+                ctx.drawImage(img, -treeWidth/2, verticalOffset, treeWidth, treeHeight);
+            } else {
+                // Boxes are smaller and sit lower
+                const boxWidth = TILE_W * 0.65;  // 65% of tile width
+                const boxHeight = img.height * (boxWidth / img.width);
+                const verticalOffset = -TILE_H - boxHeight * 0.6; // Lower placement for boxes
+                ctx.drawImage(img, -boxWidth/2, verticalOffset, boxWidth, boxHeight);
+            }
             ctx.restore();
         } else {
             ctx.fillStyle = '#7f8c8d';
