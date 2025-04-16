@@ -403,18 +403,18 @@ function drawGrid() {
             let highlight = null;
             // Highlight portée déplacement
             if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
-                highlight = 'rgba(46,204,113,0.22)'; // vert léger
+                highlight = 'rgba(46,204,113,0.22)';
             } else if (playerState === 'aiming' && attackableTiles.some(t => t.x === x && t.y === y)) {
-                highlight = 'rgba(52,152,219,0.22)'; // bleu léger
+                highlight = 'rgba(52,152,219,0.22)';
             }
             // Effet hover déplacement
             if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
                 if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
-                    highlight = 'rgba(39, 174, 96, 0.75)'; // vert foncé, très visible
+                    highlight = 'rgba(39, 174, 96, 0.75)';
                 } else if (playerState === 'aiming' && attackableTiles.some(t => t.x === x && t.y === y)) {
-                    highlight = 'rgba(41, 128, 185, 0.75)'; // bleu foncé, très visible
+                    highlight = 'rgba(41, 128, 185, 0.75)';
                 } else {
-                    highlight = 'rgba(255,255,255,0.55)'; // blanc plus visible
+                    highlight = 'rgba(255,255,255,0.55)';
                 }
             }
             // Effet zone d'effet du sort si hover en mode visée
@@ -422,15 +422,20 @@ function drawGrid() {
                 const spell = SPELLS[selectedSpell];
                 if (spell.aoe) {
                     const aoeTiles = [
-                        {x: x, y: y},           // Centre
-                        {x: x + 1, y: y},      // Droite
-                        {x: x - 1, y: y},      // Gauche
-                        {x: x, y: y + 1},      // Bas
-                        {x: x, y: y - 1}       // Haut
+                        {x: x, y: y},
+                        {x: x + 1, y: y},
+                        {x: x - 1, y: y},
+                        {x: x, y: y + 1},
+                        {x: x, y: y - 1}
                     ];
                     for (const tile of aoeTiles) {
                         if (tile.x >= 0 && tile.x < GRID_COLS && tile.y >= 0 && tile.y < GRID_ROWS) {
-                            drawTile(tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.45)'); // orange plus visible
+                            // Vérifie la ligne de vue pour chaque case de la zone
+                            if (hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y)) {
+                                drawTile(tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(230, 126, 34, 0.65)');
+                            } else {
+                                drawTile(tile.x, tile.y, mapGrid[tile.y][tile.x], 'rgba(120, 120, 120, 0.35)');
+                            }
                         }
                     }
                 } else if (spell.push) {
@@ -1017,7 +1022,7 @@ function gameLoop() {
 
 // --- Input Handling ---
 function handleKeyDown(e) {
-    if (['1','2','3'].includes(e.key)) {
+    if (["1","2","3"].includes(e.key)) {
         selectedSpell = parseInt(e.key) - 1;
         showMessage(`Sort sélectionné : ${SPELLS[selectedSpell].name}`);
         updateUI();
@@ -1028,7 +1033,14 @@ function handleKeyDown(e) {
         e.preventDefault();
         if (playerState === 'idle' && player.ap > 0) {
             playerState = 'aiming';
-            attackableTiles = getTilesInRangeBFS(player.gridX, player.gridY, PLAYER_ATTACK_RANGE, null);
+            // Correction : ne montre que les cases avec ligne de vue pour les sorts
+            const spell = SPELLS[selectedSpell];
+            if (spell.aoe || spell.push || spell.range) {
+                let allTiles = getTilesInRangeBFS(player.gridX, player.gridY, spell.range ?? PLAYER_ATTACK_RANGE, null);
+                attackableTiles = allTiles.filter(tile => hasLineOfSight(player.gridX, player.gridY, tile.x, tile.y));
+            } else {
+                attackableTiles = getTilesInRangeBFS(player.gridX, player.gridY, PLAYER_ATTACK_RANGE, null);
+            }
             reachableTiles = [];
             showMessage("Mode Visée: Cliquez case bleue pour tirer (Echap pour annuler)", 3000);
         } else if (playerState === 'aiming') {
@@ -1083,17 +1095,11 @@ function handleCanvasClick(event) {
         }
     } else if (playerState === 'aiming') {
         const targetTile = attackableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y);
-        if (targetTile) {
-            // Check Line of Sight before attacking
-            if (hasLineOfSight(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
-                playerAttack(targetTile.x, targetTile.y);
-            } else {
-                showMessage("Obstacle bloque la vue !");
-            }
-            // Always exit aiming mode after click, whether attack succeeded or not
-            playerState = 'idle';
-            attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player);
+        // Ajout : vérifie la ligne de vue AVANT d'autoriser le tir
+        if (targetTile && hasLineOfSight(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
+            playerAttack(targetTile.x, targetTile.y);
+        } else if (targetTile) {
+            showMessage("Obstacle bloque la vue !");
         } else {
             // Clicked outside blue tiles - cancel aiming
             playerState = 'idle';
@@ -1101,6 +1107,10 @@ function handleCanvasClick(event) {
             reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player);
             showMessage("Visée annulée (clic hors portée)", 1500);
         }
+        // Toujours sortir du mode visée après le clic
+        playerState = 'idle';
+        attackableTiles = [];
+        reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player);
         updateUI();
     }
 }
