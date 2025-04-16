@@ -201,6 +201,7 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                         }
                     }
                 } else if (spell.push) {
+                    // Affiche la zone de poussée UNIQUEMENT dans la direction du joueur vers la case ciblée
                     let dx = x - player.gridX;
                     let dy = y - player.gridY;
                     if (dx === 0 && dy === 0) { dx = 1; dy = 0; }
