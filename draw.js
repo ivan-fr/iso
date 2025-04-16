@@ -221,25 +221,61 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     }
                 }
             }
-            drawTile(
-                ctx,
-                x,
-                y,
-                mapGrid[y] ? mapGrid[y][x] : 0,
-                highlight,
-                tileImage,
-                tileImageLoaded,
-                mapGrid,
-                TILE_W,
-                TILE_H,
-                GRID_COLS,
-                GRID_ROWS
-            );
-            // Ajout : dessiner l'entité présente sur cette case juste après la tuile
-            for (const item of entities) {
-                if (item.entity.gridX === x && item.entity.gridY === y) {
-                    drawEntity(ctx, item.entity, item.color, ...item.args);
-                }
+            // On détermine s'il y a une entité sur cette case
+            const entityOnTile = entities.find(item => item.entity.gridX === x && item.entity.gridY === y);
+            // Si une entité animée est sur la case, on dessine la highlight AVANT l'entité, et pas après
+            if (highlight && !entityOnTile) {
+                // Cas normal : highlight dessinée avec la tuile
+                drawTile(
+                    ctx,
+                    x,
+                    y,
+                    mapGrid[y] ? mapGrid[y][x] : 0,
+                    highlight,
+                    tileImage,
+                    tileImageLoaded,
+                    mapGrid,
+                    TILE_W,
+                    TILE_H,
+                    GRID_COLS,
+                    GRID_ROWS
+                );
+            } else {
+                // Pas de highlight, ou highlight mais entité présente : on dessine la tuile sans highlight
+                drawTile(
+                    ctx,
+                    x,
+                    y,
+                    mapGrid[y] ? mapGrid[y][x] : 0,
+                    null,
+                    tileImage,
+                    tileImageLoaded,
+                    mapGrid,
+                    TILE_W,
+                    TILE_H,
+                    GRID_COLS,
+                    GRID_ROWS
+                );
+            }
+            // Si highlight et entité présente, on dessine la highlight juste avant l'entité (sous l'entité)
+            if (highlight && entityOnTile) {
+                ctx.save();
+                const pos = { x: (ctx.canvas.width / 2) + (x - y) * (TILE_W / 2), y: (TILE_H * 4) + (x + y) * (TILE_H / 2) };
+                ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                ctx.beginPath();
+                ctx.moveTo(0, -TILE_H / 2);
+                ctx.lineTo(TILE_W / 2, 0);
+                ctx.lineTo(0, TILE_H / 2);
+                ctx.lineTo(-TILE_W / 2, 0);
+                ctx.closePath();
+                ctx.fillStyle = highlight;
+                ctx.globalAlpha = 1;
+                ctx.fill();
+                ctx.restore();
+            }
+            // Entité
+            if (entityOnTile) {
+                drawEntity(ctx, entityOnTile.entity, entityOnTile.color, ...entityOnTile.args);
             }
         }
     }
@@ -251,10 +287,21 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
     let screenY = (typeof entity.screenY === 'number') ? entity.screenY : (TILE_H * 4 + (entity.gridX + entity.gridY) * (TILE_H / 2));
     entity.screenX = screenX;
     entity.screenY = screenY;
+    // Ombre limitée à la case (clip losange)
+    const zRatio = Math.max(0, Math.min(1, (entity.gridX + entity.gridY) / (TILE_W + TILE_H)));
     ctx.save();
-    ctx.globalAlpha = 0.3;
     ctx.beginPath();
-    ctx.ellipse(screenX, screenY + 6, entity.size * 0.8, entity.size * 0.3, 0, 0, Math.PI * 2);
+    ctx.moveTo(screenX, screenY + 6 - TILE_H / 2);
+    ctx.lineTo(screenX + TILE_W / 2, screenY + 6);
+    ctx.lineTo(screenX, screenY + 6 + TILE_H / 2);
+    ctx.lineTo(screenX - TILE_W / 2, screenY + 6);
+    ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha = 0.18 + 0.10 * zRatio;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 7 + 8 * zRatio;
+    ctx.beginPath();
+    ctx.ellipse(screenX, screenY + 6, entity.size * 0.55, entity.size * 0.18 + 2 * zRatio, 0, 0, Math.PI * 2);
     ctx.fillStyle = '#000';
     ctx.fill();
     ctx.restore();
