@@ -283,7 +283,10 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                         if (img) {
                             ctx.shadowColor = '#222';
                             ctx.shadowBlur = 8;
-                            ctx.drawImage(img, -TILE_W/2, -TILE_H - 18, TILE_W, TILE_W * (img.height/img.width));
+                            // Taille réduite : 0.7x la largeur de tuile, position ajustée
+                            const imgW = TILE_W * 0.7;
+                            const imgH = img.height * (imgW / img.width);
+                            ctx.drawImage(img, -imgW/2, -TILE_H - 10 - (imgH - TILE_W * 0.7) * 0.5, imgW, imgH);
                         } else {
                             ctx.fillStyle = '#7f8c8d';
                             ctx.shadowColor = '#222';
