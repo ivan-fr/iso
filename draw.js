@@ -126,9 +126,10 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
 
 // Fonction pour dessiner la grille
 export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTiles, hoveredTile, SPELLS, selectedSpell, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, hasLineOfSight, player, getTilesInRangeBFS, drawTile, tileImage, tileImageLoaded, entities = []) {
-    // 1. Dessiner toutes les tuiles de sol et highlights (jamais d'obstacle ni d'entité ici)
+    // 1. Dessiner toutes les tuiles de sol et highlights (sauf sous les obstacles)
     for (let y = 0; y < GRID_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
+            if (mapGrid[y][x] === 1) continue; // On ne dessine pas le sol ici sous les obstacles
             let highlight = null;
             if (playerState === 'idle' && reachableTiles.some(t => t.x === x && t.y === y && t.cost <= player.mp)) {
                 highlight = 'rgba(46,204,113,0.22)';
@@ -247,8 +248,31 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                     x, y,
                     screenY: pos.y,
                     draw: () => {
-                        // Dessine le sol sous l'obstacle
-                        drawTile(ctx, x, y, 0, null, tileImage, tileImageLoaded, mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS);
+                        // Dessine le sol plat sous l'obstacle, sans profondeur
+                        ctx.save();
+                        ctx.translate(Math.round(pos.x), Math.round(pos.y));
+                        if (tileImageLoaded) {
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.moveTo(0, -TILE_H / 2);
+                            ctx.lineTo(TILE_W / 2, 0);
+                            ctx.lineTo(0, TILE_H / 2);
+                            ctx.lineTo(-TILE_W / 2, 0);
+                            ctx.closePath();
+                            ctx.clip();
+                            ctx.drawImage(tileImage, -TILE_W / 2, -TILE_H / 2, TILE_W, TILE_H);
+                            ctx.restore();
+                        } else {
+                            ctx.fillStyle = (x + y) % 2 === 0 ? '#b2f7ef' : '#f7d6e0';
+                            ctx.beginPath();
+                            ctx.moveTo(0, -TILE_H / 2);
+                            ctx.lineTo(TILE_W / 2, 0);
+                            ctx.lineTo(0, TILE_H / 2);
+                            ctx.lineTo(-TILE_W / 2, 0);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                        ctx.restore();
                         // Dessine l'obstacle
                         ctx.save();
                         ctx.translate(Math.round(pos.x), Math.round(pos.y));
