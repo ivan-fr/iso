@@ -315,8 +315,7 @@ function updateProjectiles() {
                         if (boss.hp <= 0) {
                             boss.hp = 0;
                             showDeathAnimation(boss, spell.color);
-                            showMessage('Boss Vaincu ! VICTOIRE !', 5000);
-                            gameOver = true;
+                            checkVictory();
                         }
                         updateAllUIWrapper();
                         hit = true;
@@ -357,8 +356,7 @@ function updateProjectiles() {
                             if (boss.hp <= 0) {
                                 boss.hp = 0;
                                 showDeathAnimation(boss, spell.color);
-                                showMessage('Boss Vaincu ! VICTOIRE !', 5000);
-                                gameOver = true;
+                                checkVictory();
                             }
                         }
                     }
@@ -499,8 +497,7 @@ function updateProjectiles() {
                         if (boss.hp <= 0) {
                             boss.hp = 0;
                             showDeathAnimation(boss, spell.color);
-                            showMessage('Boss Vaincu ! VICTOIRE !', 5000);
-                            gameOver = true;
+                            checkVictory();
                         }
                         updateAllUIWrapper();
                     }
@@ -547,6 +544,16 @@ function updateProjectiles() {
             p.x = nextX;
             p.y = nextY;
         }
+    }
+}
+
+// Vérifie la victoire : boss ET tous les bouftous morts
+function checkVictory() {
+    const anyBouftouAlive = bouftousState.some(b => b.hp > 0);
+    if (!anyBouftouAlive && boss.hp <= 0) {
+        gameOver = true;
+        showMessage('VICTOIRE ! Tous les ennemis sont vaincus !', 5000);
+        updateAllUIWrapper();
     }
 }
 
