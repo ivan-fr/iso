@@ -22,7 +22,7 @@ let attackableTilesBoss = [];
 
 // Helper pour la LoS avec bouftous
 function hasLineOfSightAllEntities(startX, startY, endX, endY) {
-    return hasLineOfSightRaw(startX, startY, endX, endY, player, boss, bouftousState);
+    return hasLineOfSightRaw(startX, startY, endX, endY, [player, boss, ...bouftousState]);
 }
 
 // Wrapper function for updateAllUI
@@ -59,7 +59,7 @@ function startPlayerTurn() {
     playerState = 'idle';
     player.mp = MAX_MOVE_POINTS;
     player.ap = MAX_ACTION_POINTS;
-    reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+    reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
     attackableTiles = [];
     isBossActing = false;
     updateAllUIWrapper();
@@ -128,14 +128,14 @@ function handleKeyDown(e) {
         if (playerState === 'idle' && player.ap > 0) {
             playerState = 'aiming';
             const spell = SPELLS[getSelectedSpellIndex()];
-            let allTiles = getTilesInRangeBFS(player.gridX, player.gridY, spell.range ?? PLAYER_ATTACK_RANGE, null, player, boss, bouftousState);
+            let allTiles = getTilesInRangeBFS(player.gridX, player.gridY, spell.range ?? PLAYER_ATTACK_RANGE, [], true);
             attackableTiles = allTiles.filter(tile => hasLineOfSightAllEntities(player.gridX, player.gridY, tile.x, tile.y));
             reachableTiles = [];
             showMessage('Mode Visée: Cliquez case bleue pour tirer (Echap pour annuler)', 3000);
         } else if (playerState === 'aiming') {
             playerState = 'idle';
             attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
             showMessage('Visée annulée', 1500);
         }
         updateAllUIWrapper();
@@ -143,7 +143,7 @@ function handleKeyDown(e) {
         if (playerState === 'aiming') {
             playerState = 'idle';
             attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
             showMessage('Visée annulée', 1500);
             updateAllUIWrapper();
         }
@@ -202,7 +202,7 @@ function moveEntityTo(entity, targetGridX, targetGridY, cost, forceMove = false)
         isMoving = true;
         animateEntityPathEntities(entity, path, animateEntityMove, () => {
             if (entity === player) {
-                reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+                reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
             }
             isMoving = false;
             updateAllUIWrapper();
@@ -215,7 +215,7 @@ function moveEntityTo(entity, targetGridX, targetGridY, cost, forceMove = false)
         entity.screenX = final.x;
         entity.screenY = final.y;
         if (entity === player) {
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
         }
         updateAllUIWrapper();
     }
@@ -593,14 +593,14 @@ function handleCanvasClick(event) {
             playerAttack(targetTile.x, targetTile.y);
             playerState = 'idle';
             attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
             updateAllUIWrapper();
         } else if (targetTile) {
             showMessage('Obstacle bloque la vue !');
         } else {
             playerState = 'idle';
             attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
             showMessage('Visée annulée (clic hors portée)', 1500);
         }
         updateAllUIWrapper();
@@ -615,18 +615,18 @@ async function executeBossAI() {
     const spell = SPELLS.find(s => s.bossOnly && s.range > 1);
     if (spell) {
         // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
-let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss, bouftousState);
+        let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, [], true);
         attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
-// Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
-const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-if (
-    distToPlayer <= spell.range &&
-    hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
-) {
-    if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
-        attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
-    }
-}
+        // Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
+        const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+        if (
+            distToPlayer <= spell.range &&
+            hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
+        ) {
+            if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
+                attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
+            }
+        }
     } else {
         attackableTilesBoss = [];
     }
@@ -659,7 +659,7 @@ if (
     // 2. Chercher à se déplacer vers une case adjacente au joueur si ce n'est pas déjà le cas
     let isAdjacent = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1;
     if (!isAdjacent && boss.mp > 0) {
-        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss, player, boss, bouftousState);
+        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, [player, boss, ...bouftousState]);
         let foundAdj = null;
         for (const tile of bossReachable) {
             const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
@@ -697,18 +697,18 @@ if (
         if (spell) {
             console.log('[BossAI] Sort distance choisi:', spell.name, 'Portée:', spell.range);
             // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
-let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss, bouftousState);
+            let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, [], true);
             attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
-// Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
-const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-if (
-    distToPlayer <= spell.range &&
-    hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
-) {
-    if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
-        attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
-    }
-}
+            // Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
+            const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+            if (
+                distToPlayer <= spell.range &&
+                hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
+            ) {
+                if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
+                    attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
+                }
+            }
         } else {
             attackableTilesBoss = [];
         }
@@ -734,7 +734,7 @@ if (
     }
     // 5. Sinon, se rapprocher du joueur (comportement normal)
     if (usedActionPoints < MAX_ACTION_POINTS && boss.mp > 0) {
-        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, boss, player, boss, bouftousState);
+        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, [player, boss, ...bouftousState]);
         let bestTile = null;
         let bestScore = -Infinity;
         for (const tile of bossReachable) {
@@ -896,7 +896,7 @@ export function initGame() {
         b.screenX = isoToScreen(b.gridX, b.gridY).x;
         b.screenY = isoToScreen(b.gridX, b.gridY).y;
     });
-    reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, player, player, boss, bouftousState);
+    reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
     attackableTiles = [];
     updateAllUIWrapper();
     updateTurnOrder(currentTurn);

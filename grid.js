@@ -51,6 +51,26 @@ function indexToCoords(index, cols) {
 }
 
 /**
+ * Renvoie les voisins 4-directions hors obstacles et entités.
+ * @param {number} x
+ * @param {number} y
+ * @param {{gridX:number,gridY:number}[]} blockingEntities
+ * @returns {{x:number,y:number}[]}
+ */
+function getNeighbors(x, y, blockingEntities = []) {
+    const deltas = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    const out = [];
+    for (const {dx,dy} of deltas) {
+        const nx = x+dx, ny = y+dy;
+        if (nx<0||nx>=GRID_COLS||ny<0||ny>=GRID_ROWS) continue;
+        if (mapGrid[ny][nx]===1) continue;
+        if (blockingEntities.some(e=>e.gridX===nx&&e.gridY===ny)) continue;
+        out.push({x:nx,y:ny});
+    }
+    return out;
+}
+
+/**
  * Implémente l'algorithme de recherche en largeur (BFS).
  * @param {Array<Array<number>>} grid - La grille.
  * @param {Array<number>} start - Point de départ [x, y].
@@ -71,23 +91,9 @@ function bfs(grid, start, end, bouftousList = []) {
             return path;
         }
 
-        const neighbors = [
-            [x - 1, y],
-            [x + 1, y],
-            [x, y - 1],
-            [x, y + 1],
-        ];
-
-        for (const [nx, ny] of neighbors) {
-            if (
-                nx >= 0 &&
-                ny >= 0 &&
-                nx < rows &&
-                ny < cols &&
-                grid[nx][ny] === 0 &&
-                !visited.has(coordsToIndex(nx, ny, cols)) &&
-                isTileValidAndFree(nx, ny, null, null, null, bouftousList)
-            ) {
+        for (const { x: nx, y: ny } of getNeighbors(x, y, bouftousList)) {
+            const neighbors = [nx, ny];
+            if (!visited.has(coordsToIndex(nx, ny, cols))) {
                 visited.add(coordsToIndex(nx, ny, cols));
                 queue.push([[nx, ny], [...path, [nx, ny]]]);
             }
@@ -98,12 +104,71 @@ function bfs(grid, start, end, bouftousList = []) {
 }
 
 /**
+ * BFS pour tuiles accessibles.
+ * @param {number} startX
+ * @param {number} startY
+ * @param {number} maxRange
+ * @param {{gridX:number,gridY:number}[]} blockingEntities
+ * @param {boolean} [includeOrigin=false]
+ * @returns {{x:number,y:number,cost:number}[]}
+ */
+export function getTilesInRangeBFS(startX, startY, maxRange, blockingEntities = [], includeOrigin = false) {
+    const visited = new Set();
+    const queue = [{ x: startX, y: startY, cost: 0 }];
+    const reachable = [];
+    visited.add(coordsToIndex(startX, startY, GRID_COLS));
+    if (includeOrigin) reachable.push({ x: startX, y: startY, cost: 0 });
+    while (queue.length > 0) {
+        const { x, y, cost } = queue.shift();
+        if (cost >= maxRange) continue;
+        for (const { x: nx, y: ny } of getNeighbors(x, y, blockingEntities)) {
+            const idx = coordsToIndex(nx, ny, GRID_COLS);
+            if (visited.has(idx)) continue;
+            visited.add(idx);
+            const nextCost = cost + 1;
+            reachable.push({ x: nx, y: ny, cost: nextCost });
+            queue.push({ x: nx, y: ny, cost: nextCost });
+        }
+    }
+    return reachable;
+}
+
+/**
+ * Bresenham LoS avec grille et entités en obstacles.
+ * @param {number} startX
+ * @param {number} startY
+ * @param {number} endX
+ * @param {number} endY
+ * @param {...object[]} rest - soit tableau d'entités, soit liste d'args (player,boss,bouftous)
+ * @returns {boolean}
+ */
+export function hasLineOfSight(startX, startY, endX, endY, ...rest) {
+    const blockingEntities = rest.length === 1 && Array.isArray(rest[0]) ? rest[0] : rest;
+    let x1 = startX, y1 = startY;
+    const dx = Math.abs(endX - x1), dy = -Math.abs(endY - y1);
+    const sx = x1 < endX ? 1 : -1, sy = y1 < endY ? 1 : -1;
+    let err = dx + dy;
+    while (true) {
+        if (!(x1===startX && y1===startY) && !(x1===endX && y1===endY)) {
+            if (mapGrid[y1] && mapGrid[y1][x1] === 1) return false;
+            if (blockingEntities.some(e => e.gridX===x1 && e.gridY===y1)) return false;
+        }
+        if (x1===endX && y1===endY) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x1 += sx; }
+        if (e2 <= dx) { err += dx; y1 += sy; }
+    }
+    return true;
+}
+
+/**
  * Vérifie la ligne de vue (Line of Sight - LoS) entre deux points.
  * @param {Array<Array<number>>} grid - La grille.
  * @param {Array<number>} start - Point de départ [x, y].
  * @param {Array<number>} end - Point d'arrivée [x, y].
  * @returns {boolean} - True si la ligne de vue est dégagée, sinon false.
  */
+
 // --- Configuration ---
 export const TILE_W = 40;
 export const TILE_H = TILE_W / 2;
@@ -159,84 +224,6 @@ export function isTileValidAndFree(x, y, movingEntity, player, boss, bouftousLis
     if (bouftousList && Array.isArray(bouftousList)) {
         for (const b of bouftousList) {
             if (b !== movingEntity && b.hp > 0 && x === b.gridX && y === b.gridY) return false;
-        }
-    }
-    return true;
-}
-
-export function getTilesInRangeBFS(startX, startY, maxRange, entityCheckBlocking, player, boss, bouftousList = []) {
-    let visited = new Set();
-    let queue = [{ x: startX, y: startY, cost: 0 }];
-    let reachable = [];
-    visited.add(`${startX},${startY}`);
-    if (!entityCheckBlocking) {
-        reachable.push({ x: startX, y: startY, cost: 0 });
-    }
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (entityCheckBlocking && current.cost > 0) {
-            reachable.push(current);
-        }
-        if (current.cost >= maxRange) continue;
-        const neighbors = [
-            { x: current.x + 1, y: current.y },
-            { x: current.x - 1, y: current.y },
-            { x: current.x, y: current.y + 1 },
-            { x: current.x, y: current.y - 1 }
-        ];
-        for (const neighbor of neighbors) {
-            const key = `${neighbor.x},${neighbor.y}`;
-            if (!visited.has(key) && isTileValidAndFree(neighbor.x, neighbor.y, entityCheckBlocking, player, boss, bouftousList)) {
-                visited.add(key);
-                const nextCost = current.cost + 1;
-                queue.push({ x: neighbor.x, y: neighbor.y, cost: nextCost });
-                if (!entityCheckBlocking) {
-                    reachable.push({ x: neighbor.x, y: neighbor.y, cost: nextCost });
-                }
-            }
-        }
-    }
-    return reachable;
-}
-
-export function hasLineOfSight(startX, startY, endX, endY, player, boss, bouftousList = []) {
-    let x1 = startX;
-    let y1 = startY;
-    const x2 = endX;
-    const y2 = endY;
-    const dx = Math.abs(x2 - x1);
-    const dy = -Math.abs(y2 - y1);
-    const sx = x1 < x2 ? 1 : -1;
-    const sy = y1 < y2 ? 1 : -1;
-    let err = dx + dy;
-
-    while (true) {
-        // On ne bloque PAS la case de destination (endX, endY)
-        if ((x1 !== startX || y1 !== startY) && (x1 !== endX || y1 !== endY)) {
-            // Vérifie les obstacles sur la grille
-            if (x1 >= 0 && x1 < GRID_COLS && y1 >= 0 && y1 < GRID_ROWS) {
-                if (mapGrid[y1][x1] === 1) return false;
-            }
-            // Les entités BLOQUENT la ligne de vue pour les sorts (restauré)
-            if (player && x1 === player.gridX && y1 === player.gridY && (x1 !== endX || y1 !== endY)) return false;
-            if (boss && x1 === boss.gridX && y1 === boss.gridY && (x1 !== endX || y1 !== endY)) return false;
-            if (bouftousList && Array.isArray(bouftousList)) {
-                for (const b of bouftousList) {
-                    if (b.hp > 0 && x1 === b.gridX && y1 === b.gridY && (x1 !== endX || y1 !== endY)) return false;
-                }
-            }
-        }
-        if (x1 === endX && y1 === endY) break;
-        const e2 = 2 * err;
-        if (e2 >= dy) {
-            if (x1 === endX) break;
-            err += dy;
-            x1 += sx;
-        }
-        if (e2 <= dx) {
-            if (y1 === endY) break;
-            err += dx;
-            y1 += sy;
         }
     }
     return true;
