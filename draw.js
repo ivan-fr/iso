@@ -34,18 +34,19 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
             ctx.save();
             ctx.shadowColor = '#222';
             ctx.shadowBlur = 8;
-            
             if (useArbre) {
-                // Trees are taller and slightly larger
-                const treeWidth = TILE_W * 0.9;  // 90% of tile width
+                // Placement arbre inchangé
+                const treeWidth = TILE_W * 1.05;
                 const treeHeight = img.height * (treeWidth / img.width);
-                const verticalOffset = -TILE_H - treeHeight * 0.8; // Higher placement for trees
+                const verticalOffset = -TILE_H - treeHeight * 0.68;
                 ctx.drawImage(img, -treeWidth/2, verticalOffset, treeWidth, treeHeight);
             } else {
-                // Boxes are smaller and sit lower
-                const boxWidth = TILE_W * 0.65;  // 65% of tile width
+                // Placement caisse : base parfaitement alignée avec la tuile
+                const boxWidth = TILE_W * 0.82;
                 const boxHeight = img.height * (boxWidth / img.width);
-                const verticalOffset = -TILE_H - boxHeight * 0.6; // Lower placement for boxes
+                // On veut que le bas de l'image coïncide avec le bas du losange (screenY + TILE_H/2)
+                // Or l'origine du dessin est (0,0) sur la tuile, donc offset = -TILE_H/2 - boxHeight
+                const verticalOffset = TILE_H / 2 - boxHeight + 20; // Ajustement pour que la caisse ne déborde plus
                 ctx.drawImage(img, -boxWidth/2, verticalOffset, boxWidth, boxHeight);
             }
             ctx.restore();
@@ -416,6 +417,15 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
     ctx.fill();
     ctx.restore();
 
+    // Animation disparition d'entité
+    let alpha = typeof entity._deathAlpha === 'number' ? entity._deathAlpha : 1;
+    let scale = typeof entity._deathScale === 'number' ? entity._deathScale : 1;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.translate(screenX, screenY - entity.size/2);
+    ctx.scale(scale, scale);
+    ctx.translate(-screenX, -(screenY - entity.size/2));
+
     if (entity.size === 36 && bossImageLoaded) {
         const imgWidth = TILE_W * 1.2;
         const imgHeight = bossImage.height * (imgWidth / bossImage.width);
@@ -434,9 +444,8 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
         const imgHeight = window.bouftouImage.height * (imgWidth / window.bouftouImage.width);
         const drawX = screenX - imgWidth / 2;
         const drawY = screenY - imgHeight + (TILE_H / 2);
-
         ctx.drawImage(window.bouftouImage, drawX, drawY, imgWidth, imgHeight);
-    } else {
+    } else { // Cercle fallback
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(screenX, screenY - entity.size / 2, entity.size / 2, 0, Math.PI * 2);
@@ -445,9 +454,9 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
 
     if ((entity.size === 28 && currentTurn === 'player') || (entity.size === 36 && currentTurn === 'boss')) {
         ctx.save();
-        ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300));
+        ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300)) * alpha;
         ctx.beginPath();
-        ctx.arc(screenX, screenY - entity.size / 2, entity.size * 0.9, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY - entity.size / 2, entity.size * 0.9 * scale, 0, Math.PI * 2);
         ctx.shadowColor = color;
         ctx.shadowBlur = 18;
         ctx.fillStyle = color;
@@ -457,13 +466,14 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
 
     if (entity.size === 28 && currentTurn === 'player') {
         ctx.save();
-        ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300));
+        ctx.globalAlpha = 0.18 + 0.12 * Math.abs(Math.sin(Date.now() / 300)) * alpha;
         ctx.beginPath();
-        ctx.arc(screenX, screenY - entity.size / 2, entity.size * 0.7, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY - entity.size / 2, entity.size * 0.7 * scale, 0, Math.PI * 2);
         ctx.fillStyle = '#3498db';
         ctx.fill();
         ctx.restore();
     }
+    ctx.restore();
 }
 
 // Fonction pour dessiner les projectiles

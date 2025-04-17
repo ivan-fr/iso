@@ -262,6 +262,19 @@ function showDeathAnimation(entity, color = '#fff') {
 }
 
 function updateProjectiles() {
+    // Suppression effective des entités disparues (_removed)
+    for (let i = bouftousState.length - 1; i >= 0; i--) {
+        if (bouftousState[i]._removed) {
+            bouftousState.splice(i, 1);
+        }
+    }
+    if (boss._removed && !gameOver) {
+        // Boss vaincu, ne plus l'afficher
+        boss.hp = 0;
+    }
+    if (player._removed && !gameOver) {
+        player.hp = 0;
+    }
     if (gameOver) return;
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
