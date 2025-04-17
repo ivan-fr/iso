@@ -57,7 +57,7 @@ function indexToCoords(index, cols) {
  * @param {Array<number>} end - Point d'arrivée [x, y].
  * @returns {Array<Array<number>>|null} - Chemin trouvé ou null.
  */
-function bfs(grid, start, end) {
+function bfs(grid, start, end, bouftousList = []) {
     const rows = grid.length;
     const cols = grid[0].length;
     const visited = new Set();
@@ -85,7 +85,8 @@ function bfs(grid, start, end) {
                 nx < rows &&
                 ny < cols &&
                 grid[nx][ny] === 0 &&
-                !visited.has(coordsToIndex(nx, ny, cols))
+                !visited.has(coordsToIndex(nx, ny, cols)) &&
+                isTileValidAndFree(nx, ny, null, null, null, bouftousList)
             ) {
                 visited.add(coordsToIndex(nx, ny, cols));
                 queue.push([[nx, ny], [...path, [nx, ny]]]);
@@ -163,7 +164,7 @@ export function isTileValidAndFree(x, y, movingEntity, player, boss, bouftousLis
     return true;
 }
 
-export function getTilesInRangeBFS(startX, startY, maxRange, entityCheckBlocking, player, boss) {
+export function getTilesInRangeBFS(startX, startY, maxRange, entityCheckBlocking, player, boss, bouftousList = []) {
     let visited = new Set();
     let queue = [{ x: startX, y: startY, cost: 0 }];
     let reachable = [];
@@ -185,7 +186,7 @@ export function getTilesInRangeBFS(startX, startY, maxRange, entityCheckBlocking
         ];
         for (const neighbor of neighbors) {
             const key = `${neighbor.x},${neighbor.y}`;
-            if (!visited.has(key) && isTileValidAndFree(neighbor.x, neighbor.y, entityCheckBlocking, player, boss)) {
+            if (!visited.has(key) && isTileValidAndFree(neighbor.x, neighbor.y, entityCheckBlocking, player, boss, bouftousList)) {
                 visited.add(key);
                 const nextCost = current.cost + 1;
                 queue.push({ x: neighbor.x, y: neighbor.y, cost: nextCost });
