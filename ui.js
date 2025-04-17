@@ -180,8 +180,16 @@ export function setupSpellTooltips(SPELLS) {
             tooltip.style.display = 'block';
             tooltip.innerHTML = `<b>${SPELLS[i].name}</b><br>Portée: ${SPELLS[i].range}<br>Dégâts: ${SPELLS[i].damage().toString().replace(/\D/g,'')}+<br>${SPELLS[i].aoe ? 'Zone croix' : SPELLS[i].push ? 'Poussée' : 'Mono-cible'}`;
             const rect = btn.getBoundingClientRect();
-            tooltip.style.left = rect.left + rect.width/2 - 80 + 'px';
-            tooltip.style.top = (rect.top - 40 + window.scrollY) + 'px';
+            // Mesure dynamique du tooltip
+            const ttWidth = tooltip.offsetWidth;
+            const ttHeight = tooltip.offsetHeight;
+            // Centre horizontalement et clamp
+            let left = rect.left + (rect.width - ttWidth) / 2;
+            left = Math.max(8, Math.min(left, window.innerWidth - ttWidth - 8));
+            // Place juste au-dessus du bouton
+            const top = rect.top - ttHeight - 8 + window.scrollY;
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${top}px`;
         });
         btn.addEventListener('mouseleave', () => {
             tooltip.style.display = 'none';
