@@ -1,7 +1,6 @@
 // AI pour les mobs Bouftou
-import { findPath, animateEntityPath } from './entities.js';
-import { player } from './entities.js';
-import { isTileValidAndFree, GRID_COLS, GRID_ROWS } from './grid.js';
+import { findPath, animateEntityPath, player, boss } from './entities.js';
+import { isTileValidAndFree } from './grid.js';
 
 /**
  * IA de Bouftou : cherche à aller au contact du joueur et attaque au CAC si possible.
@@ -9,8 +8,9 @@ import { isTileValidAndFree, GRID_COLS, GRID_ROWS } from './grid.js';
  * @param {function} animateEntityMove - Fonction d'animation de déplacement
  * @param {function} onAttack - Fonction appelée lors d'une attaque (inflige les dégâts)
  * @param {function} onComplete - Callback quand l'IA a fini son tour
+ * @param {array} bouftousList - Liste des autres bouftous
  */
-export async function bouftouAI(bouftou, animateEntityMove, onAttack, onComplete) {
+export async function bouftouAI(bouftou, animateEntityMove, onAttack, onComplete, bouftousList = []) {
     // 1. Cherche à se rapprocher du joueur
     let dist = Math.abs(bouftou.gridX - player.gridX) + Math.abs(bouftou.gridY - player.gridY);
     let canAttack = dist === 1 && bouftou.ap > 0;
@@ -21,19 +21,13 @@ export async function bouftouAI(bouftou, animateEntityMove, onAttack, onComplete
         if (onComplete) onComplete();
         return;
     }
-    // Custom isTileValidAndFree for Bouftou pathfinding
+    // Custom tile validity for Bouftou: block obstacles and other bouftous
     function bouftouTileValid(x, y) {
-        // Autorise la case du joueur uniquement si c'est la destination
         if (x === player.gridX && y === player.gridY) return true;
-        // Empêche de marcher sur les autres Bouftous
-        for (const other of [bouftou, ...window.bouftousState || []]) {
-            if (other !== bouftou && other.hp > 0 && other.gridX === x && other.gridY === y) return false;
-        }
-        // Empêche obstacles
-        return isTileValidAndFree(x, y, bouftou, player, null);
+        return isTileValidAndFree(x, y, bouftou, player, boss, bouftousList);
     }
     // Sinon, déplacement intelligent vers le joueur
-    let path = findPath(bouftou.gridX, bouftou.gridY, player.gridX, player.gridY, bouftou, bouftouTileValid, player, null);
+    let path = findPath(bouftou.gridX, bouftou.gridY, player.gridX, player.gridY, bouftou, bouftouTileValid, player, boss);
     console.log('Bouftou', bouftou.id, 'path:', path);
     if (path && path.length > 1) {
         // On ne va pas sur la case du joueur, on s'arrête à côté

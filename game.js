@@ -108,7 +108,7 @@ async function startBouftouTurn() {
                     gameOver = true;
                 }
                 updateAllUIWrapper();
-            }, resolve);
+            }, resolve, bouftousState);
         });
         if (gameOver) break;
     }
