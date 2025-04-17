@@ -611,10 +611,22 @@ function handleCanvasClick(event) {
 async function executeBossAI() {
     let usedActionPoints = 0;
     // Génère les cases bleues d'attaque pour le boss (comme pour le joueur)
-    const spell = SPELLS.find(s => !s.bossOnly);
+    // Utilise le sort à distance du boss (bossOnly: true, range > 1)
+    const spell = SPELLS.find(s => s.bossOnly && s.range > 1);
     if (spell) {
-        let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
+        // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
+let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
         attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
+// Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
+const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+if (
+    distToPlayer <= spell.range &&
+    hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
+) {
+    if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
+        attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
+    }
+}
     } else {
         attackableTilesBoss = [];
     }
@@ -680,14 +692,29 @@ async function executeBossAI() {
     async function tryRangedAttack() {
         if (boss.ap <= 0) return false;
         // Regénère les cases bleues à chaque tentative (le joueur peut avoir bougé)
-        const spell = SPELLS.find(s => !s.bossOnly);
+        // Utilise le sort à distance du boss (bossOnly: true, range > 1)
+        const spell = SPELLS.find(s => s.bossOnly && s.range > 1);
         if (spell) {
-            let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
+            console.log('[BossAI] Sort distance choisi:', spell.name, 'Portée:', spell.range);
+            // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
+let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, null, player, boss);
             attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
+// Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
+const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+if (
+    distToPlayer <= spell.range &&
+    hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
+) {
+    if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
+        attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
+    }
+}
         } else {
             attackableTilesBoss = [];
         }
+        console.log('[BossAI] attackableTilesBoss:', attackableTilesBoss.map(t => `(${t.x},${t.y})`).join(' '), '| player:', player.gridX, player.gridY);
         const canAttack = attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY);
+        console.log('[BossAI] canAttack:', canAttack);
         if (canAttack) {
             bossAttackPlayer();
             updateAllUIWrapper();

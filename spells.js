@@ -36,8 +36,19 @@ export const SPELLS = Object.freeze([
         name: 'Coup de Masse (CAC)',
         key: null,
         color: '#c0392b',
-        damage: () => 30 + Math.floor(Math.random() * 7), // 30-36 (3x plus puissant que 10-12)
+        damage: () => 30 + Math.floor(Math.random() * 7), // 30-36
         range: 1,
+        aoe: false,
+        push: false,
+        bossOnly: true
+    },
+    // Sort à distance du boss
+    {
+        name: 'Boule de Feu',
+        key: null,
+        color: '#ff5733',
+        damage: () => 13 + Math.floor(Math.random() * 5), // 13-17
+        range: 5,
         aoe: false,
         push: false,
         bossOnly: true
