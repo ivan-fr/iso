@@ -64,7 +64,7 @@ function getNeighbors(x, y, blockingEntities = []) {
         const nx = x+dx, ny = y+dy;
         if (nx<0||nx>=GRID_COLS||ny<0||ny>=GRID_ROWS) continue;
         if (mapGrid[ny][nx]===1) continue;
-        if (blockingEntities.some(e=>e.gridX===nx&&e.gridY===ny)) continue;
+        if (blockingEntities.some(e => e.hp > 0 && e.gridX === nx && e.gridY === ny)) continue;
         out.push({x:nx,y:ny});
     }
     return out;
@@ -218,8 +218,8 @@ export function isTileValidAndFree(x, y, movingEntity, player, boss, bouftousLis
     if (mapGrid[y][x] === 1) return false;
     // Empêche de marcher sur le joueur
     if (player && movingEntity !== player && x === player.gridX && y === player.gridY) return false;
-    // Empêche de marcher sur le boss
-    if (boss && movingEntity !== boss && x === boss.gridX && y === boss.gridY) return false;
+    // Empêche de marcher sur le boss vivant
+    if (boss && boss.hp > 0 && movingEntity !== boss && x === boss.gridX && y === boss.gridY) return false;
     // Empêche de marcher sur un bouftou vivant (hors soi-même)
     if (bouftousList && Array.isArray(bouftousList)) {
         for (const b of bouftousList) {

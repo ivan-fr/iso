@@ -69,6 +69,11 @@ function startPlayerTurn() {
 }
 
 async function startBossTurn() {
+    // Si le boss est mort, on le skip et on passe aux bouftous
+    if (boss.hp <= 0) {
+        startBouftouTurn();
+        return;
+    }
     currentTurn = 'boss';
     playerState = 'idle';
     boss.mp = MAX_MOVE_POINTS;
@@ -252,7 +257,7 @@ function showDeathAnimation(entity, color = '#fff') {
             entity._deathAlpha = 0;
             entity._deathScale = 1.5;
             // Pour les bouftous, on les "retire" du jeu
-            if (entity !== player && entity !== boss) {
+            if (entity !== player) {
                 entity.hp = 0;
                 entity._removed = true;
             }
@@ -301,6 +306,7 @@ function updateProjectiles() {
                             if (b.hp <= 0) {
                                 b.hp = 0;
                                 showDeathAnimation(b, spell.color);
+                                checkVictory();
                             }
                             updateAllUIWrapper();
                             hit = true;
@@ -344,6 +350,7 @@ function updateProjectiles() {
                                 if (b.hp <= 0) {
                                     b.hp = 0;
                                     showDeathAnimation(b, spell.color);
+                                    checkVictory();
                                 }
                             }
                         }
@@ -431,6 +438,7 @@ function updateProjectiles() {
                             if (b.hp <= 0) {
                                 b.hp = 0;
                                 showDeathAnimation(b, spell.color);
+                                checkVictory();
                             }
                             updateAllUIWrapper();
                         }
@@ -465,7 +473,7 @@ function updateProjectiles() {
                                 nextPushY < 0 || nextPushY >= GRID_ROWS ||
                                 mapGrid[nextPushY]?.[nextPushX] === 1 ||
                                 (player.gridX === nextPushX && player.gridY === nextPushY) ||
-                                bouftousState.some(other => other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
+                                bouftousState.some(other => other !== b && other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
                             ) {
                                 collision = true;
                                 break;

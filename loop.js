@@ -36,6 +36,12 @@ export function startGameLoop() {
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         drawBackground(ctx, canvas);
+        // Prépare liste d'entités à dessiner (skip boss si mort)
+        const entitiesToDraw = [
+            { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
+            ...(boss.hp > 0 ? [{ entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }] : []),
+            ...bouftousState.map(b => ({ entity: b, color: '#bada55', args: [TILE_W, TILE_H, null, false, null, false, null] }))
+        ];
         drawGrid(
             ctx,
             mapGrid,
@@ -55,11 +61,7 @@ export function startGameLoop() {
             drawTile,
             tileImage,
             tileImageLoaded,
-            [
-                { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
-                { entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
-                ...bouftousState.map(b => ({ entity: b, color: '#bada55', args: [TILE_W, TILE_H, null, false, null, false, null] }))
-            ]
+            entitiesToDraw
         );
         drawProjectiles(ctx, projectiles, SPELLS);
         drawDamageAnimations(ctx, damageAnimations);
