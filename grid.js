@@ -216,14 +216,14 @@ export function hasLineOfSight(startX, startY, endX, endY, player, boss, bouftou
             if (x1 >= 0 && x1 < GRID_COLS && y1 >= 0 && y1 < GRID_ROWS) {
                 if (mapGrid[y1][x1] === 1) return false;
             }
-            // Les entités NE BLOQUENT PAS la ligne de vue pour les sorts (corrigé)
-            // if (player && x1 === player.gridX && y1 === player.gridY && (x1 !== endX || y1 !== endY)) return false;
-            // if (boss && x1 === boss.gridX && y1 === boss.gridY && (x1 !== endX || y1 !== endY)) return false;
-            // if (bouftousList && Array.isArray(bouftousList)) {
-            //     for (const b of bouftousList) {
-            //         if (b.hp > 0 && x1 === b.gridX && y1 === b.gridY && (x1 !== endX || y1 !== endY)) return false;
-            //     }
-            // }
+            // Les entités BLOQUENT la ligne de vue pour les sorts (restauré)
+            if (player && x1 === player.gridX && y1 === player.gridY && (x1 !== endX || y1 !== endY)) return false;
+            if (boss && x1 === boss.gridX && y1 === boss.gridY && (x1 !== endX || y1 !== endY)) return false;
+            if (bouftousList && Array.isArray(bouftousList)) {
+                for (const b of bouftousList) {
+                    if (b.hp > 0 && x1 === b.gridX && y1 === b.gridY && (x1 !== endX || y1 !== endY)) return false;
+                }
+            }
         }
         if (x1 === endX && y1 === endY) break;
         const e2 = 2 * err;
