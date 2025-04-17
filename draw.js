@@ -46,7 +46,7 @@ export function drawTile(ctx, gridX, gridY, type, highlightColor, tileImage, til
                 const boxHeight = img.height * (boxWidth / img.width);
                 // On veut que le bas de l'image coïncide avec le bas du losange (screenY + TILE_H/2)
                 // Or l'origine du dessin est (0,0) sur la tuile, donc offset = -TILE_H/2 - boxHeight
-                const verticalOffset = TILE_H / 2 - boxHeight + 20; // Ajustement pour que la caisse ne déborde plus
+                const verticalOffset = TILE_H / 2; // Force la caisse à toucher le bas du losange
                 ctx.drawImage(img, -boxWidth/2, verticalOffset, boxWidth, boxHeight);
             }
             ctx.restore();
@@ -342,7 +342,7 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
                             // Taille réduite : 0.7x la largeur de tuile, position ajustée
                             const imgW = TILE_W * 0.7;
                             const imgH = img.height * (imgW / img.width);
-                            ctx.drawImage(img, -imgW/2, -TILE_H - 10 - (imgH - TILE_W * 0.7) * 0.5, imgW, imgH);
+                            ctx.drawImage(img, -imgW/2, TILE_H / 2 - imgH, imgW, imgH);
                         } else {
                             ctx.fillStyle = '#7f8c8d';
                             ctx.shadowColor = '#222';
