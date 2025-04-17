@@ -1,6 +1,7 @@
 // AI pour les mobs Bouftou
 import { findPath, animateEntityPath, player, boss } from './entities.js';
-import { isTileValidAndFree } from './grid.js';
+import { isTileValidAndFree, getTilesInRangeBFS, hasLineOfSight } from './grid.js';
+import { SPELLS } from './spells.js';
 
 /**
  * Planifie l'action du bouftou: chemin de mouvement et attaques.
@@ -70,5 +71,54 @@ export async function bouftouAI(bouftou, animateEntityMove, onAttack, onComplete
         onAttack(bouftou, player);
         bouftou.ap--;
     }
+    if (onComplete) onComplete();
+}
+
+// Plan du boss (mêlée, déplacement, post-mêlée, distance)
+export function computeBossPlan(boss, bouftousList = []) {
+    const dist0 = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+    const initialMelee = dist0 === 1 && boss.ap > 0;
+    // Chemin A* vers le joueur
+    const isValid = (x, y) => {
+        if (x === player.gridX && y === player.gridY) return true;
+        return isTileValidAndFree(x, y, boss, player, boss, bouftousList);
+    };
+    const path = findPath(boss.gridX, boss.gridY, player.gridX, player.gridY, boss, isValid, player, boss) || [];
+    let moveCost = 0, movePath = [];
+    if (path.length > 1) {
+        moveCost = Math.min(boss.mp, path.length - 2);
+        movePath = path.slice(0, moveCost + 1);
+    }
+    const end = movePath.length > 0 ? movePath[movePath.length - 1] : {};
+    const postMoveMelee = end.x !== undefined && Math.abs(end.x - player.gridX) + Math.abs(end.y - player.gridY) === 1 && boss.ap > 0;
+    // Attaque à distance
+    const spellR = SPELLS.find(s => s.bossOnly && s.range > 1);
+    let rangedAttack = false, rangedTarget = null;
+    if (spellR) {
+        const tiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spellR.range, [], true);
+        const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
+        if (distToPlayer <= spellR.range && hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY, player, boss, ...bouftousList)) {
+            rangedAttack = true;
+            rangedTarget = { x: player.gridX, y: player.gridY };
+        }
+    }
+    return { initialMelee, movePath, postMoveMelee, rangedAttack, rangedTarget, moveCost };
+}
+
+// IA du boss : planification + exécution (à la manière de bouftouAI)
+export async function bossAI(boss, animateEntityMove, onMeleeAttack, onRangedAttack, onComplete, bouftousList = []) {
+    const plan = computeBossPlan(boss, bouftousList);
+    // 1. Mêlée initiale
+    if (plan.initialMelee) onMeleeAttack(boss, player);
+    // 2. Déplacement
+    if (!plan.initialMelee && plan.movePath.length > 1) {
+        await new Promise(resolve => animateEntityPath(boss, plan.movePath, animateEntityMove, resolve));
+        const end = plan.movePath[plan.movePath.length - 1];
+        boss.gridX = end.x; boss.gridY = end.y; boss.mp -= plan.moveCost;
+    }
+    // 3. Mêlée post-déplacement
+    if (!plan.initialMelee && plan.postMoveMelee) onMeleeAttack(boss, player);
+    // 4. Attaque à distance
+    if (plan.rangedAttack) onRangedAttack(plan.rangedTarget);
     if (onComplete) onComplete();
 }

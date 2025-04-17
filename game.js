@@ -2,7 +2,7 @@ import { player, boss, findPath, animateEntityPath as animateEntityPathEntities,
 import { SPELLS, setSelectedSpell, getSelectedSpellIndex } from './spells.js';
 import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight as hasLineOfSightRaw, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
 import { showMessage, updateAllUI, setupSpellBarListeners, playSound, updateTurnOrder, setupSpellTooltips, stopSound } from './ui.js';
-import { bouftouAI } from './ai.js';
+import { bouftouAI, bossAI } from './ai.js';
 
 // Variables d'état globales
 export let currentTurn = 'player';
@@ -86,8 +86,39 @@ async function startBossTurn() {
     updateTurnOrder(currentTurn);
     playSound('turn');
     showMessage('Tour du Boss', 1500);
-    await executeBossAI();
-    if (!gameOver) { endTurn(); } else { updateAllUIWrapper(); }
+    // Orchestration via bossAI
+    await new Promise(resolve => {
+        bossAI(boss, animateEntityMove,
+            (entity, target) => {
+                // Melee attack
+                const spellM = SPELLS.find(s => s.bossOnly && s.range === 1);
+                if (spellM) {
+                    const dmg = spellM.damage();
+                    target.hp -= dmg;
+                    showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, spellM.color);
+                    showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
+                    if (target.hp <= 0) {
+                        target.hp = 0;
+                        showDeathAnimation(target, spellM.color);
+                        showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                        gameOver = true;
+                    }
+                    updateAllUIWrapper();
+                }
+            },
+            target => {
+                // Ranged attack
+                bossAttackPlayer();
+                updateAllUIWrapper();
+            },
+            resolve,
+            bouftousState
+        );
+        // Marque fin de l'action du boss
+        isBossActing = false;
+    });
+    if (!gameOver) endTurn();
+    else updateAllUIWrapper();
 }
 
 async function startBouftouTurn() {
@@ -406,7 +437,7 @@ function updateProjectiles() {
                                     mapGrid[nextPushY]?.[nextPushX] === 1 ||
                                     (player.gridX === nextPushX && player.gridY === nextPushY) ||
                                     (boss.gridX === nextPushX && boss.gridY === nextPushY) ||
-                                    bouftousState.some(other => other !== b && other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
+                                    bouftousState.some(other => other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
                                 ) {
                                     collision = true;
                                     break;
@@ -473,7 +504,7 @@ function updateProjectiles() {
                                 nextPushY < 0 || nextPushY >= GRID_ROWS ||
                                 mapGrid[nextPushY]?.[nextPushX] === 1 ||
                                 (player.gridX === nextPushX && player.gridY === nextPushY) ||
-                                bouftousState.some(other => other !== b && other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
+                                bouftousState.some(other => other.hp > 0 && other.gridX === nextPushX && other.gridY === nextPushY)
                             ) {
                                 collision = true;
                                 break;

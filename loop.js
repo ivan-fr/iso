@@ -39,7 +39,8 @@ export function startGameLoop() {
         // Prépare liste d'entités à dessiner (skip boss si mort)
         const entitiesToDraw = [
             { entity: player, color: '#3498db', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] },
-            ...(boss.hp > 0 ? [{ entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }] : []),
+            // Dessine le boss tant qu'il n'est pas supprimé (_removed après animation)
+            ...(boss._removed ? [] : [{ entity: boss, color: '#c0392b', args: [TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn] }]),
             ...bouftousState.map(b => ({ entity: b, color: '#bada55', args: [TILE_W, TILE_H, null, false, null, false, null] }))
         ];
         drawGrid(
