@@ -42,12 +42,12 @@
             background: linear-gradient(to bottom, #6dd5ed, #2193b0); /* Gradient background */
         }
         .info-bar {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
             width: 100%;
             margin-bottom: 10px;
-            font-size: 0.7em;
+            font-size: 0.8em;
         }
         .info-group {
             background-color: rgba(0,0,0,0.2);
@@ -64,6 +64,18 @@
             margin-top: 5px;
             font-size: 0.75em;
             color: #bdc3c7;
+        }
+        .info ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .info li {
+            margin: 4px 0;
+        }
+        .info li::before {
+            content: '• ';
+            color: #ecf0f1;
         }
         button {
             font-family: 'Press Start 2P', cursive;
@@ -127,6 +139,12 @@
         .message-box.show {
             opacity: 1;
         }
+        .spell-btn svg {
+            transition: transform 0.2s ease;
+        }
+        .spell-btn:hover svg {
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -143,19 +161,19 @@
             <div class="info-group">
                 Tour: <span id="turn-indicator">Joueur</span>
             </div>
-             <div class="info-group">
+            <div class="info-group">
                 Joueur HP:
-                 <div class="health-bar-container">
+                <div class="health-bar-container">
                     <div id="player-health-bar" class="health-bar"></div>
                 </div>
-                <span id="player-ap">2</span> PA / <span id="player-mp">6</span> PM
+                ⚡<span id="player-ap">2</span> 🏃<span id="player-mp">6</span>
             </div>
             <div class="info-group">
                 Boss HP:
                 <div class="health-bar-container">
                     <div id="boss-health-bar" class="health-bar"></div>
                 </div>
-                 <span id="boss-ap">2</span> PA / <span id="boss-mp">6</span> PM
+                ⚡<span id="boss-ap">2</span> 🏃<span id="boss-mp">6</span>
             </div>
         </div>
 
@@ -187,8 +205,12 @@
         <div class="controls">
             <button id="endTurnButton">Fin de Tour (F)</button>
         </div>
-         <div class="info">
-            Tour Joueur: Cliquez case verte (bouger). Espace (viser), clic case bleue (tirer), Echap (annuler). Obstacles gris bloquent.
+        <div class="info">
+            <ul>
+                <li>Clique: déplacer (tuiles vertes)</li>
+                <li>Space + clic: attaquer (tuiles bleues)</li>
+                <li>F ou bouton: fin de tour</li>
+            </ul>
         </div>
     </div>
     <div id="messageBox" class="message-box">Message</div>
