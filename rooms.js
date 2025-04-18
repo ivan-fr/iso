@@ -9,7 +9,7 @@ export const ROOMS = [
       // exemple : {x:7, y:7}, {x:8, y:8}
     ],
     enemies: [
-      { type: 'bouftou', gridX: 4, gridY: 11 },
+      { type: 'bouftou', gridX: 6, gridY: 12 },
       { type: 'bouftou', gridX: 11, gridY: 4 },
       { type: 'boufton_noir', gridX: 5, gridY: 5 },
       { type: 'boufton_noir', gridX: 11, gridY: 11 }

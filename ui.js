@@ -24,15 +24,10 @@ export function updateHealthBar(barElement, currentHp, maxHp) {
 }
 
 // Mise à jour de l'UI générale
-export function updateUI(turnIndicator, playerApDisplay, playerMpDisplay, bossApDisplay, bossMpDisplay, player, boss, playerHealthBar, bossHealthBar, currentTurn, isMoving, isBossActing, playerState, endTurnButton, gameOver) {
-    turnIndicator.textContent = currentTurn === 'player' ? 'Joueur' : 'Boss';
-    playerApDisplay.textContent = player.ap;
-    playerMpDisplay.textContent = player.mp;
-    bossApDisplay.textContent = boss.ap;
-    bossMpDisplay.textContent = boss.mp;
-    updateHealthBar(playerHealthBar, player.hp, player.maxHp);
-    updateHealthBar(bossHealthBar, boss.hp, boss.maxHp);
-    endTurnButton.disabled = isMoving || isBossActing || currentTurn !== 'player' || playerState !== 'idle' || gameOver;
+export function updateUI(isMoving, isBossActing, playerState, endTurnButton, gameOver) {
+    if (endTurnButton) {
+        endTurnButton.disabled = isMoving || isBossActing || playerState !== 'idle' || gameOver;
+    }
 }
 
 /**
@@ -77,44 +72,18 @@ export function setupSpellBarListeners(setSelectedSpellFn, getSelectedSpellIndex
  * @param {object} params - All UI and state references needed for update.
  */
 export function updateAllUI({
-    turnIndicator,
-    playerApDisplay,
-    playerMpDisplay,
-    bossApDisplay,
-    bossMpDisplay,
-    player,
-    boss,
-    playerHealthBar,
-    bossHealthBar,
-    currentTurn,
     isMoving,
     isBossActing,
     playerState,
     endTurnButton,
     gameOver
 }) {
-    updateUI(
-        turnIndicator,
-        playerApDisplay,
-        playerMpDisplay,
-        bossApDisplay,
-        bossMpDisplay,
-        player,
-        boss,
-        playerHealthBar,
-        bossHealthBar,
-        currentTurn,
-        isMoving,
-        isBossActing,
-        playerState,
-        endTurnButton,
-        gameOver
-    );
+    updateUI(isMoving, isBossActing, playerState, endTurnButton, gameOver);
     // Cursor feedback
     const canvas = document.getElementById('gameCanvas');
     if (!canvas) return;
     if (gameOver) canvas.style.cursor = 'default';
-    else if (currentTurn !== 'player' || isBossActing) canvas.style.cursor = 'default';
+    else if (isBossActing) canvas.style.cursor = 'default';
     else if (playerState === 'aiming') canvas.style.cursor = 'crosshair';
     else if (playerState === 'idle') canvas.style.cursor = 'pointer';
     else canvas.style.cursor = 'default';

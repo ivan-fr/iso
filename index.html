@@ -38,14 +38,13 @@
         }
         canvas {
             display: block;
-            margin: 10px auto;
-            /* background-color: #87CEEB; Removed, grid draws background */
             border: 2px solid #ecf0f1;
             border-radius: 10px;
             cursor: default;
-            max-width: 100%;
-            height: auto;
-            background: linear-gradient(to bottom, #6dd5ed, #2193b0); /* Gradient background */
+            background: linear-gradient(to bottom, #6dd5ed, #2193b0);
+            width: 100vw;
+            height: 100vh;
+            transition: none;
         }
         .info-bar {
             display: grid;
@@ -151,43 +150,117 @@
         .spell-btn:hover svg {
             transform: scale(1.1);
         }
+    /* Highlight du sort sélectionné */
+    .spell-btn.selected {
+        box-shadow: 0 0 0 3px #ffd700, 0 0 16px 4px #ffe06699;
+        border-radius: 10px;
+        transform: scale(1.1);
+        z-index: 2;
+    }
+    /* Couleurs de tour dynamiques */
+    .turn-player {
+        background: linear-gradient(90deg, #3498db 0%, #6dd5ed 100%) !important;
+    }
+    .turn-boss {
+        background: linear-gradient(90deg, #c0392b 0%, #e74c3c 100%) !important;
+    }
+    .turn-enemy {
+        background: linear-gradient(90deg, #8e44ad 0%, #9b59b6 100%) !important;
+    }
+    /* Overlay PV sur entités */
+    .entity-hp-label {
+        position: absolute;
+        font-size: 0.8em;
+        font-family: 'Press Start 2P', cursive;
+        color: #fff;
+        background: rgba(44,62,80,0.92);
+        border: 2px solid #222;
+        border-radius: 6px;
+        padding: 2px 7px;
+        pointer-events: none;
+        box-shadow: 0 2px 8px #222;
+        transition: opacity 0.3s, transform 0.3s;
+        z-index: 11;
+        opacity: 0.95;
+        line-height: 1.2;
+        text-shadow: 1px 1px 2px #222;
+    }
+    /* Animation douce sur resize du container et canvas */
+    .game-container, canvas {
+        transition: width 0.5s, height 0.5s, box-shadow 0.4s;
+    }
+    /* Overlay victoire/défaite animé */
+    #endgame-overlay {
+        position: absolute;
+        left: 0; top: 0; width: 100%; height: 100%;
+        background: rgba(30,30,30,0.82);
+        display: flex;
+        align-items: center; justify-content: center;
+        z-index: 200;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.7s;
+    }
+    #endgame-overlay.show {
+        opacity: 1;
+        pointer-events: all;
+    }
+    #endgame-overlay .endgame-text {
+        font-size: 2.2em;
+        color: #fff;
+        text-shadow: 2px 2px 10px #000, 0 0 24px #ffd700;
+        padding: 32px 60px;
+        border-radius: 18px;
+        background: rgba(50,50,50,0.92);
+        box-shadow: 0 0 40px #222;
+        font-family: 'Press Start 2P', cursive;
+    }
+    /* Message d'action contextuel */
+    #actionMessage {
+        position: absolute;
+        left: 50%; top: 70px;
+        transform: translateX(-50%);
+        background: #222b;
+        color: #ffd700;
+        font-size: 1.1em;
+        padding: 8px 22px;
+        border-radius: 10px;
+        z-index: 120;
+        box-shadow: 0 2px 12px #0007;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s;
+        font-family: 'Press Start 2P', cursive;
+        font-weight: bold;
+    }
+    #actionMessage.show { opacity: 1; }
     </style>
+
+    <script>
+      // --- Full-screen canvas resizing ---
+      function updateCanvasSize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const canvas = document.getElementById('gameCanvas');
+        if (canvas) {
+          canvas.width = w;
+          canvas.height = h;
+        }
+      }
+      window.addEventListener('resize', updateCanvasSize);
+      document.addEventListener('DOMContentLoaded', updateCanvasSize);
+    </script>
 </head>
-<body>
-    <div class="game-container">
-        <h1 class="text-lg mb-2">Iso Turn Fight v5.2</h1>
-        <div id="room-indicator" style="font-size:1em;margin-bottom:8px;font-weight:bold;color:#ffd700;"></div>
+<body style="margin:0;padding:0;overflow:hidden;">
+    <canvas id="gameCanvas" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:0;display:block;background:linear-gradient(to bottom,#6dd5ed,#2193b0);" tabindex="0"></canvas>
+    <div id="entity-overlays" style="position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:10;"></div>
+    <!-- UI overlays -->
+    <div id="ui-overlay" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:20;pointer-events:none;">
+        <!-- Top bar -->
+        <div id="room-indicator" style="position:absolute;left:50%;top:18px;transform:translateX(-50%);font-size:1.1em;font-weight:bold;color:#ffd700;pointer-events:auto;"></div>
 
-        <div id="turnOrder" style="font-size:0.9em;margin-bottom:8px;transition:background 0.4s;">
-            <span id="turnOrder-player" style="padding:2px 10px;border-radius:6px;background:#3498db;color:#fff;">Joueur</span>
-            <span style="margin:0 8px;">→</span>
-            <span id="turnOrder-boss" style="padding:2px 10px;border-radius:6px;background:#c0392b;color:#fff;">Boss</span>
-        </div>
-
-        <div class="info-bar">
-            <div class="info-group">
-                Tour: <span id="turn-indicator">Joueur</span>
-            </div>
-            <div class="info-group">
-                Joueur HP:
-                <div class="health-bar-container">
-                    <div id="player-health-bar" class="health-bar"></div>
-                </div>
-                ⚡<span id="player-ap">2</span> 🏃<span id="player-mp">6</span>
-            </div>
-            <div class="info-group">
-                Boss HP:
-                <div class="health-bar-container">
-                    <div id="boss-health-bar" class="health-bar"></div>
-                </div>
-                ⚡<span id="boss-ap">2</span> 🏃<span id="boss-mp">6</span>
-            </div>
-        </div>
-
-        <canvas id="gameCanvas" width="600" height="450"></canvas>
-
-        <!-- Barre de sélection de sorts SVG -->
-        <div id="spellBar" style="display:flex;justify-content:center;gap:18px;margin:10px 0;position:relative;">
+        <!-- Barre de sorts -->
+        <div id="spellBar" style="position:absolute;left:50%;bottom:54px;transform:translateX(-50%);display:flex;justify-content:center;gap:18px;z-index:30;pointer-events:auto;background:rgba(44,62,80,0.93);padding:10px 24px;border-radius:14px;box-shadow:0 2px 16px #0006;">
             <button class="spell-btn" id="spell-btn-0" title="Mono-cible" style="background:none;border:none;outline:none;cursor:pointer;padding:0;">
                 <svg width="44" height="44" viewBox="0 0 44 44">
                     <circle cx="22" cy="22" r="16" fill="#f1c40f" stroke="#222" stroke-width="2"/>
@@ -208,11 +281,12 @@
             </button>
         </div>
         <div id="spellTooltip" style="position:absolute;z-index:200;pointer-events:none;background:rgba(44,62,80,0.97);color:#fff;padding:8px 14px;border-radius:8px;box-shadow:0 2px 8px #222;font-size:0.8em;display:none;max-width:220px;line-height:1.5;"></div>
-
-        <div class="controls">
+        <!-- Bouton fin de tour -->
+        <div class="controls" style="position:absolute;right:32px;bottom:50px;z-index:31;pointer-events:auto;">
             <button id="endTurnButton">Fin de Tour (F)</button>
         </div>
-        <div class="info">
+        <!-- Infos commandes -->
+        <div class="info" style="position:absolute;left:32px;bottom:50px;z-index:31;pointer-events:none;">
             <ul>
                 <li>Clique: déplacer (tuiles vertes)</li>
                 <li>Space + clic: attaquer (tuiles bleues)</li>

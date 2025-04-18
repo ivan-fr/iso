@@ -37,22 +37,11 @@ function hasLineOfSightAllEntities(startX, startY, endX, endY) {
 // Wrapper function for updateAllUI
 function updateAllUIWrapper() {
     updateAllUI({
-        turnIndicator: document.getElementById('turn-indicator'),
-        playerApDisplay: document.getElementById('player-ap'),
-        playerMpDisplay: document.getElementById('player-mp'),
-        bossApDisplay: document.getElementById('boss-ap'),
-        bossMpDisplay: document.getElementById('boss-mp'),
-        player,
-        boss,
-        playerHealthBar: document.getElementById('player-health-bar'),
-        bossHealthBar: document.getElementById('boss-health-bar'),
-        currentTurn,
         isMoving,
         isBossActing,
         playerState,
         endTurnButton: document.getElementById('endTurnButton'),
-        gameOver,
-        bouftous: bouftousState
+        gameOver
     });
 }
 

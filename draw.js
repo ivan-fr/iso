@@ -393,7 +393,7 @@ export function drawGrid(ctx, mapGrid, playerState, reachableTiles, attackableTi
 
 // Fonction pour dessiner une entité
 export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossImageLoaded, playerImage, playerImageLoaded, currentTurn) {
-    let screenX = (typeof entity.screenX === 'number') ? entity.screenX : ((TILE_W * 14) / 2 + (entity.gridX - entity.gridY) * (TILE_W / 2));
+    let screenX = (typeof entity.screenX === 'number') ? entity.screenX : (ctx.canvas.width / 2 + (entity.gridX - entity.gridY) * (TILE_W / 2));
     let screenY = (typeof entity.screenY === 'number') ? entity.screenY : (TILE_H * 4 + (entity.gridX + entity.gridY) * (TILE_H / 2));
     entity.screenX = screenX;
     entity.screenY = screenY;
