@@ -438,6 +438,13 @@ export function drawEntity(ctx, entity, color, TILE_W, TILE_H, bossImage, bossIm
         const drawX = screenX - imgWidth / 2;
         const drawY = screenY - imgHeight + (TILE_H / 2);
         ctx.drawImage(playerImage, drawX, drawY, imgWidth, imgHeight);
+    } else if (entity.size === 26 && entity.type === 'boufton_noir' && window.bouftonNoirImage) {
+        // Boufton noir
+        const imgWidth = TILE_W * 0.9;
+        const imgHeight = window.bouftonNoirImage.height * (imgWidth / window.bouftonNoirImage.width);
+        const drawX = screenX - imgWidth / 2;
+        const drawY = screenY - imgHeight + (TILE_H / 2);
+        ctx.drawImage(window.bouftonNoirImage, drawX, drawY, imgWidth, imgHeight);
     } else if (entity.size === 26 && window.bouftouImage) {
         // Bouftou
         const imgWidth = TILE_W * 0.9;

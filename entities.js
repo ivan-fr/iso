@@ -27,11 +27,13 @@ export class Boss extends Entity {
     }
 }
 
+import { ENEMY_TYPES } from './enemyTypes.js';
+
 export const player = {
     gridX: 2,
     gridY: 2,
     size: 28,
-    hp: 100,
+    hp: 100, // Could be ENEMY_TYPES.player.hp if you want to unify
     maxHp: 100,
     mp: 6,
     ap: 2,
@@ -42,46 +44,37 @@ export const player = {
 export const boss = {
     gridX: GRID_COLS - 3,
     gridY: GRID_ROWS - 3,
-    size: 36,
-    hp: 150,
-    maxHp: 150,
-    mp: 6,
-    ap: 2,
+    size: ENEMY_TYPES.boss.size || 36,
+    hp: ENEMY_TYPES.boss.hp,
+    maxHp: ENEMY_TYPES.boss.maxHp,
+    mp: ENEMY_TYPES.boss.mp,
+    ap: ENEMY_TYPES.boss.ap,
     screenX: null,
     screenY: null
 };
 
-// --- Bouftou mobs ---
-export const bouftous = [
-    {
-        id: 1,
-        gridX: 4,
-        gridY: 11,
-        size: 26,
-        hp: 40,
-        maxHp: 40,
-        mp: 4,
-        ap: 1,
+// --- Génération dynamique des ennemis selon la salle ---
+
+export function createEnemy(type, gridX, gridY) {
+    const base = ENEMY_TYPES[type];
+    if (!base) throw new Error('Type ennemi inconnu: ' + type);
+    return {
+        id: Math.random().toString(36).slice(2),
+        gridX,
+        gridY,
+        size: base.size || 26,
+        hp: base.hp,
+        maxHp: base.maxHp,
+        mp: base.mp,
+        ap: base.ap,
         screenX: null,
         screenY: null,
-        image: 'bouftou.png',
-        aiType: 'bouftou',
-    },
-    {
-        id: 2,
-        gridX: 11,
-        gridY: 4,
-        size: 26,
-        hp: 40,
-        maxHp: 40,
-        mp: 4,
-        ap: 1,
-        screenX: null,
-        screenY: null,
-        image: 'bouftou.png',
-        aiType: 'bouftou',
-    }
-];
+        image: base.image || (type === 'boufton_noir' ? 'boufton_noir.png' : undefined),
+        aiType: base.aiType,
+        type
+    };
+}
+// Plus de tableau bouftous statique : tout est généré dynamiquement par salle.
 
 // Pathfinding (A*)
 export function findPath(startX, startY, endX, endY, entity, isTileValidAndFree, player, boss) {

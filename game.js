@@ -1,10 +1,14 @@
 import { bossAI, bouftouAI } from './ai.js';
-import { animateEntityPath as animateEntityPathEntities, boss, bouftous, findPath, player } from './entities.js';
-import { BOSS_ATTACK_DAMAGE, GRID_COLS, GRID_ROWS, MAX_ACTION_POINTS, MAX_MOVE_POINTS, PLAYER_ATTACK_RANGE, PROJECTILE_SPEED, getTilesInRangeBFS, hasLineOfSight as hasLineOfSightRaw, isTileValidAndFree, isoToScreen, mapGrid, screenToIso } from './grid.js';
+import { bouftonNoirAI, chefAI } from './ai_extra.js';
+import { animateEntityPath as animateEntityPathEntities, boss, createEnemy, player, findPath } from './entities.js';
+import { ROOMS } from './rooms.js';
+import { ENEMY_TYPES } from './enemyTypes.js';
+import { BOSS_ATTACK_DAMAGE, MAX_ACTION_POINTS, MAX_MOVE_POINTS, PLAYER_ATTACK_RANGE, PROJECTILE_SPEED, getTilesInRangeBFS, hasLineOfSight as hasLineOfSightRaw, isTileValidAndFree, isoToScreen, screenToIso, createGrid } from './grid.js';
 import { SPELLS, getSelectedSpellIndex, setSelectedSpell } from './spells.js';
 import { playSound, setupSpellBarListeners, setupSpellTooltips, showMessage, stopSound, updateAllUI, updateTurnOrder } from './ui.js';
 
 // Variables d'état globales
+export let currentRoom = 1;
 export let currentTurn = 'player';
 export let playerState = 'idle';
 export let reachableTiles = [];
@@ -15,8 +19,12 @@ export let gameOver = false;
 export let projectiles = [];
 export let hoveredTile = null;
 export let damageAnimations = [];
-export let bouftousState = bouftous.map(b => ({ ...b }));
+export let bouftousState = [];
 
+// Taille dynamique de la grille
+export let GRID_COLS = 16;
+export let GRID_ROWS = 16;
+export let mapGrid = createGrid(GRID_ROWS, GRID_COLS);
 
 // Ajout : cases d'attaque accessibles pour le boss (cases bleues)
 let attackableTilesBoss = [];
@@ -219,29 +227,97 @@ async function startBossTurn() {
 }
 
 async function startBouftouTurn() {
-    console.log('Début du tour des Bouftous');
+    console.log('Début du tour des ennemis');
+    // Reset PA/PM pour chaque ennemi selon son type
     for (const b of bouftousState) {
-        b.mp = 4;
-        b.ap = 1;
+        const base = ENEMY_TYPES[b.type];
+        b.mp = base ? base.mp : 4;
+        b.ap = base ? base.ap : 1;
+        b._specialUsed = false;
+        b._supportUsed = false;
     }
     for (const b of bouftousState) {
         if (b.hp <= 0) continue;
-        console.log('Bouftou joue:', b);
+        console.log('Ennemi joue:', b);
         await new Promise(resolve => {
-            bouftouAI(b, animateEntityMove, (bouftou, target) => {
-                // Attaque CAC
-                const dmg = 9 + Math.floor(Math.random() * 4); // 9-12
-                target.hp -= dmg;
-                showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, '#bada55');
-                showMessage('Bouftou attaque ! (-' + dmg + ' HP)', 900);
-                if (target.hp <= 0) {
-                    target.hp = 0;
-                    showDeathAnimation(target, '#bada55');
-                    showMessage('Joueur Vaincu ! GAME OVER', 5000);
-                    gameOver = true;
-                }
-                updateAllUIWrapper();
-            }, resolve, bouftousState);
+            if (b.type === 'bouftou') {
+                bouftouAI(b, animateEntityMove, (bouftou, target) => {
+                    // Attaque CAC
+                    const dmg = 9 + Math.floor(Math.random() * 4); // 9-12
+                    target.hp -= dmg;
+                    showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, '#bada55');
+                    showMessage('Bouftou attaque ! (-' + dmg + ' HP)', 900);
+                    if (target.hp <= 0) {
+                        target.hp = 0;
+                        showDeathAnimation(target, '#bada55');
+                        showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                        gameOver = true;
+                    }
+                    updateAllUIWrapper();
+                }, resolve, bouftousState);
+            } else if (b.type === 'boufton_noir') {
+                bouftonNoirAI(b, animateEntityMove,
+                    (entity, target) => new Promise(res => {
+                        // Attaque à distance
+                        const spell = SPELLS.find(s => s.bouftonNoirOnly && !s.special);
+                        if (spell && b.ap >= 2) {
+                            const dmg = spell.damage();
+                            target.hp -= dmg;
+                            showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, spell.color);
+                            showMessage('Boufton noir lance Boulance noire ! (-' + dmg + ' PM)', 1000);
+                            if (target.hp <= 0) {
+                                target.hp = 0;
+                                showDeathAnimation(target, spell.color);
+                                showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                                gameOver = true;
+                            }
+                            updateAllUIWrapper();
+                            setTimeout(res, 700);
+                        } else { res(); }
+                    }),
+                    (entity, target) => new Promise(res => {
+                        // Sort spécial -2 PM
+                        const spell = SPELLS.find(s => s.bouftonNoirOnly && s.special === 'remove_mp');
+                        if (spell && b.ap >= 1) {
+                            target.mp = Math.max(0, target.mp - 2);
+                            showMessage('Boufton noir retire 2 PM au joueur !', 1000);
+                            updateAllUIWrapper();
+                            setTimeout(res, 700);
+                        } else { res(); }
+                    }),
+                    resolve, bouftousState);
+            } else if (b.type === 'chef') {
+                chefAI(b, animateEntityMove,
+                    (entity, target) => new Promise(res => {
+                        // Attaque puissante CAC
+                        const spell = SPELLS.find(s => s.chefOnly && !s.special);
+                        if (spell && b.ap >= 2) {
+                            const dmg = spell.damage();
+                            target.hp -= dmg;
+                            showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, spell.color);
+                            showMessage('Chef de guerre frappe ! (-' + dmg + ' HP)', 1000);
+                            if (target.hp <= 0) {
+                                target.hp = 0;
+                                showDeathAnimation(target, spell.color);
+                                showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                                gameOver = true;
+                            }
+                            updateAllUIWrapper();
+                            setTimeout(res, 700);
+                        } else { res(); }
+                    }),
+                    (entity, ally) => new Promise(res => {
+                        // Sort soutien +2 PM
+                        const spell = SPELLS.find(s => s.chefOnly && s.special === 'give_mp');
+                        if (spell && b.ap >= 1) {
+                            ally.mp += 2;
+                            showMessage('Chef de guerre donne 2 PM à un allié !', 1000);
+                            updateAllUIWrapper();
+                            setTimeout(res, 700);
+                        } else { res(); }
+                    }),
+                    resolve, bouftousState);
+            }
         });
         if (gameOver) break;
     }
@@ -686,10 +762,16 @@ function updateProjectiles() {
 // Vérifie la victoire : boss ET tous les bouftous morts
 function checkVictory() {
     const anyBouftouAlive = bouftousState.some(b => b.hp > 0);
-    if (!anyBouftouAlive && boss.hp <= 0) {
-        gameOver = true;
-        showMessage('VICTOIRE ! Tous les ennemis sont vaincus !', 5000);
-        updateAllUIWrapper();
+    const bossAlive = boss && boss.hp > 0 && !boss._removed;
+    if (!anyBouftouAlive && !bossAlive) {
+        if (currentRoom < ROOMS.length) {
+            showMessage('Salle terminée ! Passage à la salle suivante...', 2500);
+            setTimeout(() => loadRoom(currentRoom + 1), 2500);
+        } else {
+            gameOver = true;
+            showMessage('VICTOIRE FINALE ! Tous les ennemis sont vaincus !', 5000);
+            updateAllUIWrapper();
+        }
     }
 }
 
@@ -773,18 +855,78 @@ export function initGame() {
     setupSpellBarListeners(setSelectedSpell, getSelectedSpellIndex, SPELLS, showMessage, updateAllUIWrapper);
     setupSpellTooltips(SPELLS);
     setupInputHandlers();
+    loadRoom(1);
+}
+
+export function loadRoom(roomIndex) {
+    // Reset état
+    gameOver = false;
+    currentRoom = roomIndex;
+    currentTurn = 'player';
+    playerState = 'idle';
+    reachableTiles = [];
+    attackableTiles = [];
+    isMoving = false;
+    isBossActing = false;
+    projectiles = [];
+    hoveredTile = null;
+    damageAnimations = [];
+    attackableTilesBoss = [];
+    // Map et obstacles
+    const room = ROOMS[roomIndex - 1];
+    // Adapter la taille de la map (GRID_COLS/ROWS dynamiques)
+    GRID_COLS = room.gridCols;
+    GRID_ROWS = room.gridRows;
+    mapGrid = createGrid(GRID_ROWS, GRID_COLS);
+    // Place obstacles
+    for (const obs of room.obstacles) {
+      if (mapGrid[obs.y] && mapGrid[obs.y][obs.x] !== undefined) {
+        mapGrid[obs.y][obs.x] = 1;
+      }
+    }
+    // Position du joueur
+    player.gridX = 2;
+    player.gridY = 2;
+    player.mp = MAX_MOVE_POINTS;
+    player.ap = MAX_ACTION_POINTS;
+    player.hp = player.maxHp = 100;
     player.screenX = isoToScreen(player.gridX, player.gridY).x;
     player.screenY = isoToScreen(player.gridX, player.gridY).y;
-    boss.screenX = isoToScreen(boss.gridX, boss.gridY).x;
-    boss.screenY = isoToScreen(boss.gridX, boss.gridY).y;
+    // Boss (salle 3 sinon hors-jeu)
+    if (room.enemies.some(e => e.type === 'boss')) {
+      boss.gridX = room.enemies.find(e => e.type === 'boss').gridX;
+      boss.gridY = room.enemies.find(e => e.type === 'boss').gridY;
+      boss.hp = boss.maxHp = ENEMY_TYPES.boss.hp;
+      boss.mp = ENEMY_TYPES.boss.mp;
+      boss.ap = ENEMY_TYPES.boss.ap;
+      boss.screenX = isoToScreen(boss.gridX, boss.gridY).x;
+      boss.screenY = isoToScreen(boss.gridX, boss.gridY).y;
+      boss._removed = false;
+    } else {
+      boss._removed = true;
+      boss.hp = 0;
+    }
+    // Génération dynamique des ennemis
+    bouftousState = room.enemies.filter(e => e.type !== 'boss').map(e => createEnemy(e.type, e.gridX, e.gridY));
     bouftousState.forEach(b => {
-        b.screenX = isoToScreen(b.gridX, b.gridY).x;
-        b.screenY = isoToScreen(b.gridX, b.gridY).y;
+      b.screenX = isoToScreen(b.gridX, b.gridY).x;
+      b.screenY = isoToScreen(b.gridX, b.gridY).y;
+      b._removed = false;
     });
+    // Reset visuel complet
+    if (window.ctx && window.canvas) {
+      window.ctx.clearRect(0, 0, window.canvas.width, window.canvas.height);
+    }
+    // Calcul de la grille de mouvement du joueur
     reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
-    attackableTiles = [];
-    updateAllUIWrapper();
+    // Réinitialise toute UI si besoin (barres, overlays, etc.)
+    if (typeof updateAllUIWrapper === 'function') updateAllUIWrapper();
     updateTurnOrder(currentTurn);
-    playSound('turn'); // Play turn sound on initial game start
-    showMessage('Bienvenue ! Combattez le boss.', 3000);
+    playSound('turn');
+    showMessage(room.name + ' : Combattez les ennemis !', 3000);
+    // Indique la salle dans l'UI (si tu as une div #room-indicator ou sinon dans le message)
+    const indicator = document.getElementById('room-indicator');
+    if (indicator) indicator.textContent = 'Salle actuelle : ' + room.name;
+
 }
+

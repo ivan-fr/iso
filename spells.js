@@ -52,6 +52,54 @@ export const SPELLS = Object.freeze([
         aoe: false,
         push: false,
         bossOnly: true
+    },
+    // Sorts Boufton noir
+    {
+        name: 'Boulance noire',
+        key: null,
+        color: '#222',
+        damage: () => 6 + Math.floor(Math.random() * 3), // 6-8
+        range: 3,
+        aoe: false,
+        push: false,
+        bouftonNoirOnly: true,
+        cost: 2
+    },
+    {
+        name: 'Retrait PM',
+        key: null,
+        color: '#0099ff',
+        damage: () => 0,
+        range: 4,
+        aoe: false,
+        push: false,
+        bouftonNoirOnly: true,
+        special: 'remove_mp',
+        cost: 1
+    },
+    // Sorts Chef de guerre
+    {
+        name: 'Coup de corne',
+        key: null,
+        color: '#ffb347',
+        damage: () => 20 + Math.floor(Math.random() * 6), // 20-25
+        range: 1,
+        aoe: false,
+        push: false,
+        chefOnly: true,
+        cost: 2
+    },
+    {
+        name: 'Soutien PM',
+        key: null,
+        color: '#2ecc40',
+        damage: () => 0,
+        range: 4,
+        aoe: false,
+        push: false,
+        chefOnly: true,
+        special: 'give_mp',
+        cost: 1
     }
 ]);
 
