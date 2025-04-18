@@ -177,30 +177,36 @@ async function startBossTurn() {
     // Orchestration via bossAI
     await new Promise(resolve => {
         bossAI(boss, animateEntityMove,
-            (entity, target) => {
-                // Coût 1 PA pour attaque mêlée
-                entity.ap--;
-                // Melee attack
-                const spellM = SPELLS.find(s => s.bossOnly && s.range === 1);
-                if (spellM) {
-                    const dmg = spellM.damage();
-                    target.hp -= dmg;
-                    showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, spellM.color);
-                    showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
-                    if (target.hp <= 0) {
-                        target.hp = 0;
-                        showDeathAnimation(target, spellM.color);
-                        showMessage('Joueur Vaincu ! GAME OVER', 5000);
-                        gameOver = true;
+            async (entity, target) => {
+                return new Promise(resolve => {
+                    // Coût 1 PA pour attaque mêlée
+                    entity.ap--;
+                    const spellM = SPELLS.find(s => s.bossOnly && s.range === 1);
+                    if (spellM) {
+                        const dmg = spellM.damage();
+                        target.hp -= dmg;
+                        showDamageAnimation(target.screenX, target.screenY - target.size / 2, dmg, spellM.color);
+                        showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
+                        if (target.hp <= 0) {
+                            target.hp = 0;
+                            showDeathAnimation(target, spellM.color);
+                            showMessage('Joueur Vaincu ! GAME OVER', 5000);
+                            gameOver = true;
+                        }
+                        updateAllUIWrapper();
+                        setTimeout(resolve, 700);
+                    } else {
+                        resolve();
                     }
-                    updateAllUIWrapper();
-                }
+                });
             },
-            target => {
-                // Coût 1 PA pour attaque à distance
-                boss.ap--;
-                bossAttackPlayer();
-                updateAllUIWrapper();
+            async target => {
+                return new Promise(resolve => {
+                    console.log('[Boss] Attaque à distance lancée, PA restants:', boss.ap);
+                    bossAttackPlayer();
+                    updateAllUIWrapper();
+                    setTimeout(resolve, 1300); // délai augmenté pour voir chaque tir
+                });
             },
             resolve,
             bouftousState
@@ -689,7 +695,7 @@ function checkVictory() {
 
 function bossAttackPlayer() {
     if (boss.ap <= 0 || gameOver) return;
-    // PA déjà réduit dans le callback de l'IA
+    boss.ap--; // PA réduit ici, pour chaque attaque à distance
     const startX = boss.screenX;
     const startY = boss.screenY - boss.size / 2;
     const playerScreenPos = isoToScreen(player.gridX, player.gridY);
@@ -701,8 +707,8 @@ function bossAttackPlayer() {
     const dy = targetY - startY;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist === 0) return;
-    const projectileDx = (dx / dist) * PROJECTILE_SPEED;
-    const projectileDy = (dy / dist) * PROJECTILE_SPEED;
+    const projectileDx = (dx / dist) * (PROJECTILE_SPEED * 0.5); // projectile plus lent
+    const projectileDy = (dy / dist) * (PROJECTILE_SPEED * 0.5);
     projectiles.push({
         x: startX,
         y: startY,

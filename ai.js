@@ -112,7 +112,7 @@ export async function bossAI(boss, animateEntityMove, onMeleeAttack, onRangedAtt
     // 1. Attaques mêlées initiales tant que le boss a des PA et est adjacent
     if (plan.initialMelee) {
         while (boss.ap > 0 && Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1) {
-            onMeleeAttack(boss, player);
+            await onMeleeAttack(boss, player);
         }
     }
     // 2. Déplacement
@@ -124,14 +124,15 @@ export async function bossAI(boss, animateEntityMove, onMeleeAttack, onRangedAtt
     // 3. Attaques mêlées après déplacement tant que le boss dispose de PA et est adjacent
     if (!plan.initialMelee && plan.postMoveMelee) {
         while (boss.ap > 0 && Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1) {
-            onMeleeAttack(boss, player);
+            await onMeleeAttack(boss, player);
         }
     }
     // 4. Attaques multiples à distance tant que le boss dispose de PA et que le joueur est visible
     let target = plan.rangedTarget;
     if (plan.rangedAttack) {
         while (boss.ap > 0) {
-            onRangedAttack(target);
+            await onRangedAttack(target);
+            await new Promise(r => setTimeout(r, 0)); // Force la mise à jour de boss.ap
             const newPlan = computeBossPlan(boss, bouftousList);
             if (!newPlan.rangedAttack) break;
             target = newPlan.rangedTarget;
