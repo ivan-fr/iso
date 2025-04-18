@@ -91,13 +91,14 @@ export function computeBossPlan(boss, bouftousList = []) {
     }
     const end = movePath.length > 0 ? movePath[movePath.length - 1] : {};
     const postMoveMelee = end.x !== undefined && Math.abs(end.x - player.gridX) + Math.abs(end.y - player.gridY) === 1 && boss.ap > 0;
-    // Attaque à distance
+    // Attaque à distance après déplacement
     const spellR = SPELLS.find(s => s.bossOnly && s.range > 1);
     let rangedAttack = false, rangedTarget = null;
     if (spellR) {
-        const tiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spellR.range, [], true);
-        const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-        if (distToPlayer <= spellR.range && hasLineOfSight(boss.gridX, boss.gridY, player.gridX, player.gridY, player, boss, ...bouftousList)) {
+        const finalX = movePath.length > 0 ? movePath[movePath.length - 1].x : boss.gridX;
+        const finalY = movePath.length > 0 ? movePath[movePath.length - 1].y : boss.gridY;
+        const distToPlayer = Math.abs(finalX - player.gridX) + Math.abs(finalY - player.gridY);
+        if (distToPlayer <= spellR.range && hasLineOfSight(finalX, finalY, player.gridX, player.gridY, player, boss, ...bouftousList)) {
             rangedAttack = true;
             rangedTarget = { x: player.gridX, y: player.gridY };
         }
