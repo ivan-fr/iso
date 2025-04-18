@@ -1,8 +1,8 @@
-import { player, boss, findPath, animateEntityPath as animateEntityPathEntities, bouftous } from './entities.js';
-import { SPELLS, setSelectedSpell, getSelectedSpellIndex } from './spells.js';
-import { mapGrid, TILE_W, TILE_H, GRID_COLS, GRID_ROWS, MAP_OFFSET_X, MAP_OFFSET_Y, MAX_MOVE_POINTS, MAX_ACTION_POINTS, PLAYER_MAX_HP, BOSS_MAX_HP, PLAYER_ATTACK_RANGE, BOSS_ATTACK_RANGE, BOSS_ATTACK_RANGE_SQ, PROJECTILE_SPEED, hasLineOfSight as hasLineOfSightRaw, getTilesInRangeBFS, isTileValidAndFree, isoToScreen, screenToIso, BOSS_ATTACK_DAMAGE } from './grid.js';
-import { showMessage, updateAllUI, setupSpellBarListeners, playSound, updateTurnOrder, setupSpellTooltips, stopSound } from './ui.js';
-import { bouftouAI, bossAI } from './ai.js';
+import { bossAI, bouftouAI } from './ai.js';
+import { animateEntityPath as animateEntityPathEntities, boss, bouftous, findPath, player } from './entities.js';
+import { BOSS_ATTACK_DAMAGE, GRID_COLS, GRID_ROWS, MAX_ACTION_POINTS, MAX_MOVE_POINTS, PLAYER_ATTACK_RANGE, PROJECTILE_SPEED, getTilesInRangeBFS, hasLineOfSight as hasLineOfSightRaw, isTileValidAndFree, isoToScreen, mapGrid, screenToIso } from './grid.js';
+import { SPELLS, getSelectedSpellIndex, setSelectedSpell } from './spells.js';
+import { playSound, setupSpellBarListeners, setupSpellTooltips, showMessage, stopSound, updateAllUI, updateTurnOrder } from './ui.js';
 
 // Variables d'état globales
 export let currentTurn = 'player';
@@ -16,6 +16,7 @@ export let projectiles = [];
 export let hoveredTile = null;
 export let damageAnimations = [];
 export let bouftousState = bouftous.map(b => ({ ...b }));
+
 
 // Ajout : cases d'attaque accessibles pour le boss (cases bleues)
 let attackableTilesBoss = [];
@@ -68,6 +69,93 @@ function startPlayerTurn() {
     showMessage('Tour du Joueur', 1500);
 }
 
+function handleCanvasClick(event) {
+    if (gameOver || currentTurn !== 'player' || isMoving || isBossActing) return;
+    const canvas = document.getElementById('gameCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+    let foundEntity = null;
+    [player, boss, ...bouftousState].forEach(entity => {
+        const sx = (typeof entity.screenX === 'number') ? entity.screenX : isoToScreen(entity.gridX, entity.gridY).x;
+        const sy = (typeof entity.screenY === 'number') ? entity.screenY : isoToScreen(entity.gridX, entity.gridY).y;
+        const radius = entity.size * 0.6;
+        if (Math.pow(clickX - sx, 2) + Math.pow(clickY - (sy - entity.size / 2), 2) < radius * radius) {
+            foundEntity = entity;
+        }
+    });
+    let clickedGrid;
+    if (foundEntity) {
+        clickedGrid = { x: foundEntity.gridX, y: foundEntity.gridY };
+    } else {
+        clickedGrid = screenToIso(clickX, clickY);
+    }
+    if (playerState === 'idle') {
+        const targetTile = reachableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y && tile.cost <= player.mp);
+        if (targetTile) {
+            moveEntityTo(player, targetTile.x, targetTile.y, targetTile.cost);
+        } else {
+            showMessage('Case invalide ou hors de portée.');
+        }
+    } else if (playerState === 'aiming') {
+        // Correction : si on clique sur une entité, on force l'ajout de la case dans attackableTiles si elle est à portée et LoS
+        let targetTile = attackableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y);
+        if (!targetTile && foundEntity) {
+            const spell = SPELLS[getSelectedSpellIndex()];
+            const dist = Math.abs(player.gridX - foundEntity.gridX) + Math.abs(player.gridY - foundEntity.gridY);
+            if (dist <= (spell.range ?? PLAYER_ATTACK_RANGE) && hasLineOfSightAllEntities(player.gridX, player.gridY, foundEntity.gridX, foundEntity.gridY)) {
+                targetTile = { x: foundEntity.gridX, y: foundEntity.gridY };
+            }
+        }
+        if (targetTile && hasLineOfSightAllEntities(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
+            playerAttack(targetTile.x, targetTile.y);
+            playerState = 'idle';
+            attackableTiles = [];
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
+            updateAllUIWrapper();
+        } else if (targetTile) {
+            showMessage('Obstacle bloque la vue !');
+        } else {
+            playerState = 'idle';
+            attackableTiles = [];
+            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
+            showMessage('Visée annulée (clic hors portée)', 1500);
+        }
+        updateAllUIWrapper();
+    }
+}
+
+function playerAttack(targetGridX, targetGridY) {
+    player.ap--;
+    updateAllUIWrapper();
+    const spell = SPELLS[getSelectedSpellIndex()];
+    const startX = player.screenX;
+    const startY = player.screenY - player.size / 2;
+    const targetPos = isoToScreen(targetGridX, targetGridY);
+    const targetX = targetPos.x;
+    const targetY = targetPos.y;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return;
+    const speed = spell.push ? PROJECTILE_SPEED * 1.5 : PROJECTILE_SPEED;
+    projectiles.push({
+        x: startX,
+        y: startY,
+        dx: (dx / dist) * speed,
+        dy: (dy / dist) * speed,
+        owner: 'player',
+        targetScreenX: targetX,
+        targetScreenY: targetY,
+        targetGridX,
+        targetGridY,
+        spellIndex: getSelectedSpellIndex(),
+        spellData: spell
+    });
+    playSound('spell');
+    showMessage(`Sort lancé : ${spell.name}`, 1000);
+}
+
 async function startBossTurn() {
     // Si le boss est mort, on le skip et on passe aux bouftous
     if (boss.hp <= 0) {
@@ -90,6 +178,8 @@ async function startBossTurn() {
     await new Promise(resolve => {
         bossAI(boss, animateEntityMove,
             (entity, target) => {
+                // Coût 1 PA pour attaque mêlée
+                entity.ap--;
                 // Melee attack
                 const spellM = SPELLS.find(s => s.bossOnly && s.range === 1);
                 if (spellM) {
@@ -107,7 +197,8 @@ async function startBossTurn() {
                 }
             },
             target => {
-                // Ranged attack
+                // Coût 1 PA pour attaque à distance
+                boss.ap--;
                 bossAttackPlayer();
                 updateAllUIWrapper();
             },
@@ -596,235 +687,9 @@ function checkVictory() {
     }
 }
 
-// Override handleCanvasClick to use animated movement and projectiles
-function handleCanvasClick(event) {
-    if (gameOver || currentTurn !== 'player' || isMoving || isBossActing) return;
-    const canvas = document.getElementById('gameCanvas');
-    const rect = canvas.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top;
-    let foundEntity = null;
-    [player, boss, ...bouftousState].forEach(entity => {
-        const sx = (typeof entity.screenX === 'number') ? entity.screenX : isoToScreen(entity.gridX, entity.gridY).x;
-        const sy = (typeof entity.screenY === 'number') ? entity.screenY : isoToScreen(entity.gridX, entity.gridY).y;
-        const radius = entity.size * 0.6;
-        if (Math.pow(clickX - sx, 2) + Math.pow(clickY - (sy - entity.size / 2), 2) < radius * radius) {
-            foundEntity = entity;
-        }
-    });
-    let clickedGrid;
-    if (foundEntity) {
-        clickedGrid = { x: foundEntity.gridX, y: foundEntity.gridY };
-    } else {
-        clickedGrid = screenToIso(clickX, clickY);
-    }
-    if (playerState === 'idle') {
-        const targetTile = reachableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y && tile.cost <= player.mp);
-        if (targetTile) {
-            moveEntityTo(player, targetTile.x, targetTile.y, targetTile.cost);
-        } else {
-            showMessage('Case invalide ou hors de portée.');
-        }
-    } else if (playerState === 'aiming') {
-        // Correction : si on clique sur une entité, on force l'ajout de la case dans attackableTiles si elle est à portée et LoS
-        let targetTile = attackableTiles.find(tile => tile.x === clickedGrid.x && tile.y === clickedGrid.y);
-        if (!targetTile && foundEntity) {
-            const spell = SPELLS[getSelectedSpellIndex()];
-            const dist = Math.abs(player.gridX - foundEntity.gridX) + Math.abs(player.gridY - foundEntity.gridY);
-            if (dist <= (spell.range ?? PLAYER_ATTACK_RANGE) && hasLineOfSightAllEntities(player.gridX, player.gridY, foundEntity.gridX, foundEntity.gridY)) {
-                targetTile = { x: foundEntity.gridX, y: foundEntity.gridY };
-            }
-        }
-        if (targetTile && hasLineOfSightAllEntities(player.gridX, player.gridY, targetTile.x, targetTile.y)) {
-            playerAttack(targetTile.x, targetTile.y);
-            playerState = 'idle';
-            attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
-            updateAllUIWrapper();
-        } else if (targetTile) {
-            showMessage('Obstacle bloque la vue !');
-        } else {
-            playerState = 'idle';
-            attackableTiles = [];
-            reachableTiles = getTilesInRangeBFS(player.gridX, player.gridY, player.mp, [player, boss, ...bouftousState]);
-            showMessage('Visée annulée (clic hors portée)', 1500);
-        }
-        updateAllUIWrapper();
-    }
-}
-
-// --- Boss AI and Turn Logic ---
-async function executeBossAI() {
-    let usedActionPoints = 0;
-    // Génère les cases bleues d'attaque pour le boss (comme pour le joueur)
-    // Utilise le sort à distance du boss (bossOnly: true, range > 1)
-    const spell = SPELLS.find(s => s.bossOnly && s.range > 1);
-    if (spell) {
-        // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
-        let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, [], true);
-        attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
-        // Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
-        const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-        if (
-            distToPlayer <= spell.range &&
-            hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
-        ) {
-            if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
-                attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
-            }
-        }
-    } else {
-        attackableTilesBoss = [];
-    }
-    // 1. Essayer d'attaquer au CAC si possible
-    async function tryMeleeAttack() {
-        if (boss.ap <= 0) return false;
-        const dx = Math.abs(boss.gridX - player.gridX);
-        const dy = Math.abs(boss.gridY - player.gridY);
-        if ((dx + dy) === 1) { // Adjacent (portée 1)
-            boss.ap--;
-            const spell = SPELLS.find(s => s.bossOnly && s.range === 1);
-            if (spell) {
-                const dmg = spell.damage();
-                player.hp -= dmg;
-                showDamageAnimation(player.screenX, player.screenY - player.size / 2, dmg, spell.color);
-                showMessage(`Le Boss frappe au corps à corps ! (-${dmg} HP)`, 1000);
-                if (player.hp <= 0) {
-                    player.hp = 0;
-                    showDeathAnimation(player, spell.color);
-                    showMessage('Joueur Vaincu ! GAME OVER', 5000);
-                    gameOver = true;
-                }
-                updateAllUIWrapper();
-                await delay(700);
-                return true;
-            }
-        }
-        return false;
-    }
-    // 2. Chercher à se déplacer vers une case adjacente au joueur si ce n'est pas déjà le cas
-    let isAdjacent = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1;
-    if (!isAdjacent && boss.mp > 0) {
-        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, [player, boss, ...bouftousState]);
-        let foundAdj = null;
-        for (const tile of bossReachable) {
-            const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
-            if (distToPlayer === 1) {
-                foundAdj = tile;
-                break;
-            }
-        }
-        if (foundAdj) {
-            await new Promise(resolve => {
-                moveEntityTo(boss, foundAdj.x, foundAdj.y, foundAdj.cost, true);
-                function waitMove() {
-                    if (!isMoving) resolve();
-                    else setTimeout(waitMove, 10);
-                }
-                waitMove();
-            });
-            await delay(500);
-            // Après déplacement, retenter le CAC
-            while (usedActionPoints < MAX_ACTION_POINTS) {
-                const melee = await tryMeleeAttack();
-                if (melee) { usedActionPoints++; continue; }
-                break;
-            }
-            isBossActing = false;
-            return;
-        }
-    }
-    // 3. Si pas de CAC possible, attaquer à distance si possible
-    async function tryRangedAttack() {
-        if (boss.ap <= 0) return false;
-        // Regénère les cases bleues à chaque tentative (le joueur peut avoir bougé)
-        // Utilise le sort à distance du boss (bossOnly: true, range > 1)
-        const spell = SPELLS.find(s => s.bossOnly && s.range > 1);
-        if (spell) {
-            console.log('[BossAI] Sort distance choisi:', spell.name, 'Portée:', spell.range);
-            // Correction : entityCheckBlocking=null pour ne pas bloquer la portée sur les entités
-            let allTiles = getTilesInRangeBFS(boss.gridX, boss.gridY, spell.range, [], true);
-            attackableTilesBoss = allTiles.filter(tile => hasLineOfSightAllEntities(boss.gridX, boss.gridY, tile.x, tile.y));
-            // Ajoute explicitement la case du joueur si elle est à portée et en ligne de vue
-            const distToPlayer = Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY);
-            if (
-                distToPlayer <= spell.range &&
-                hasLineOfSightAllEntities(boss.gridX, boss.gridY, player.gridX, player.gridY)
-            ) {
-                if (!attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY)) {
-                    attackableTilesBoss.push({ x: player.gridX, y: player.gridY });
-                }
-            }
-        } else {
-            attackableTilesBoss = [];
-        }
-        console.log('[BossAI] attackableTilesBoss:', attackableTilesBoss.map(t => `(${t.x},${t.y})`).join(' '), '| player:', player.gridX, player.gridY);
-        const canAttack = attackableTilesBoss.some(tile => tile.x === player.gridX && tile.y === player.gridY);
-        console.log('[BossAI] canAttack:', canAttack);
-        if (canAttack) {
-            bossAttackPlayer();
-            updateAllUIWrapper();
-            await delay(800);
-            usedActionPoints++;
-            return true;
-        }
-        return false;
-    }
-    // 4. Attaque à distance si possible
-    while (usedActionPoints < MAX_ACTION_POINTS) {
-        const melee = await tryMeleeAttack();
-        if (melee) { usedActionPoints++; continue; }
-        const ranged = await tryRangedAttack();
-        if (ranged) continue;
-        break;
-    }
-    // 5. Sinon, se rapprocher du joueur (comportement normal)
-    if (usedActionPoints < MAX_ACTION_POINTS && boss.mp > 0) {
-        const bossReachable = getTilesInRangeBFS(boss.gridX, boss.gridY, boss.mp, [player, boss, ...bouftousState]);
-        let bestTile = null;
-        let bestScore = -Infinity;
-        for (const tile of bossReachable) {
-            const distToPlayer = Math.abs(tile.x - player.gridX) + Math.abs(tile.y - player.gridY);
-            const inAttackRange = Math.pow(tile.x - player.gridX, 2) + Math.pow(tile.y - player.gridY, 2) <= BOSS_ATTACK_RANGE_SQ;
-            const hasLoS = hasLineOfSightAllEntities(tile.x, tile.y, player.gridX, player.gridY);
-            let score = -distToPlayer * 10;
-            if (inAttackRange && hasLoS) score += 1000;
-            score -= tile.cost * 5;
-            if (score > bestScore) {
-                bestScore = score;
-                bestTile = tile;
-            }
-        }
-        if (bestTile && (bestScore > -Infinity)) {
-            await new Promise(resolve => {
-                moveEntityTo(boss, bestTile.x, bestTile.y, bestTile.cost, true);
-                function waitMove() {
-                    if (!isMoving) resolve();
-                    else setTimeout(waitMove, 10);
-                }
-                waitMove();
-            });
-            await delay(500);
-            // Réessayer d'attaquer après déplacement
-            while (usedActionPoints < MAX_ACTION_POINTS) {
-                const melee = await tryMeleeAttack();
-                if (melee) { usedActionPoints++; continue; }
-                const ranged = await tryRangedAttack();
-                if (ranged) continue;
-                break;
-            }
-        }
-    }
-    isBossActing = false;
-}
-
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function bossAttackPlayer() {
     if (boss.ap <= 0 || gameOver) return;
-    boss.ap--;
+    // PA déjà réduit dans le callback de l'IA
     const startX = boss.screenX;
     const startY = boss.screenY - boss.size / 2;
     const playerScreenPos = isoToScreen(player.gridX, player.gridY);
@@ -848,38 +713,6 @@ function bossAttackPlayer() {
         targetScreenY: targetY
     });
     showMessage('Le Boss attaque !', 1000);
-}
-
-// --- Player Spell/Projectile Logic ---
-function playerAttack(targetGridX, targetGridY) {
-    player.ap--;
-    updateAllUIWrapper();
-    const spell = SPELLS[getSelectedSpellIndex()];
-    const startX = player.screenX;
-    const startY = player.screenY - player.size / 2;
-    const targetPos = isoToScreen(targetGridX, targetGridY);
-    const targetX = targetPos.x;
-    const targetY = targetPos.y;
-    const dx = targetX - startX;
-    const dy = targetY - startY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) return;
-    const speed = spell.push ? PROJECTILE_SPEED * 1.5 : PROJECTILE_SPEED;
-    projectiles.push({
-        x: startX,
-        y: startY,
-        dx: (dx / dist) * speed,
-        dy: (dy / dist) * speed,
-        owner: 'player',
-        targetScreenX: targetX,
-        targetScreenY: targetY,
-        targetGridX,
-        targetGridY,
-        spellIndex: getSelectedSpellIndex(),
-        spellData: spell
-    });
-    playSound('spell');
-    showMessage(`Sort lancé : ${spell.name}`, 1000);
 }
 
 // Game loop hook for projectiles and damage animations

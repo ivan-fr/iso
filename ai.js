@@ -109,17 +109,33 @@ export function computeBossPlan(boss, bouftousList = []) {
 // IA du boss : planification + exécution (à la manière de bouftouAI)
 export async function bossAI(boss, animateEntityMove, onMeleeAttack, onRangedAttack, onComplete, bouftousList = []) {
     const plan = computeBossPlan(boss, bouftousList);
-    // 1. Mêlée initiale
-    if (plan.initialMelee) onMeleeAttack(boss, player);
+    // 1. Attaques mêlées initiales tant que le boss a des PA et est adjacent
+    if (plan.initialMelee) {
+        while (boss.ap > 0 && Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1) {
+            onMeleeAttack(boss, player);
+        }
+    }
     // 2. Déplacement
     if (!plan.initialMelee && plan.movePath.length > 1) {
         await new Promise(resolve => animateEntityPath(boss, plan.movePath, animateEntityMove, resolve));
         const end = plan.movePath[plan.movePath.length - 1];
         boss.gridX = end.x; boss.gridY = end.y; boss.mp -= plan.moveCost;
     }
-    // 3. Mêlée post-déplacement
-    if (!plan.initialMelee && plan.postMoveMelee) onMeleeAttack(boss, player);
-    // 4. Attaque à distance
-    if (plan.rangedAttack) onRangedAttack(plan.rangedTarget);
+    // 3. Attaques mêlées après déplacement tant que le boss dispose de PA et est adjacent
+    if (!plan.initialMelee && plan.postMoveMelee) {
+        while (boss.ap > 0 && Math.abs(boss.gridX - player.gridX) + Math.abs(boss.gridY - player.gridY) === 1) {
+            onMeleeAttack(boss, player);
+        }
+    }
+    // 4. Attaques multiples à distance tant que le boss dispose de PA et que le joueur est visible
+    let target = plan.rangedTarget;
+    if (plan.rangedAttack) {
+        while (boss.ap > 0) {
+            onRangedAttack(target);
+            const newPlan = computeBossPlan(boss, bouftousList);
+            if (!newPlan.rangedAttack) break;
+            target = newPlan.rangedTarget;
+        }
+    }
     if (onComplete) onComplete();
 }
